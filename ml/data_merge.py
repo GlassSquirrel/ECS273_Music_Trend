@@ -139,24 +139,48 @@ def build_lyrics_df(vocab, records, msd_track_ids: set, max_vocab=MAX_VOCAB):
 
     count_matrix = count_matrix.tocsr()
 
-    # ── 2.2 TF-IDF 加权 ──────────────────────────
+    # ── 过滤stop words ──────────────────────────
+    LYRIC_STOP_WORDS = {
+        "i", "the", "you", "to", "and", "a", "me", "it", "not", "my",
+        "we", "of", "is", "in", "do", "your", "am", "on", "are", "she",
+        "he", "will", "be", "that", "this", "for", "have", "what", "all",
+        "no", "so", "but", "if", "or", "at", "by", "an", "as", "was",
+        "with", "from", "her", "his", "they", "them", "their", "our",
+        "its", "been", "has", "had", "would", "could", "should", "may",
+        "can", "did", "does", "let", "got", "get", "just", "now", "up",
+        "out", "about", "when", "there", "here", "than", "then", "more",
+        "some", "who", "how", "into", "like", "one", "oh", "yeah", "la",
+        "na", "da", "hey", "ah", "uh", "ooh", "gonna", "wanna", "gotta",
+        "cause", "em", "ya", "y", "de", "que", "babi", "come", "go",
+        "know", "said", "say", "see", "make", "take", "give", "came",
+        "way", "time", "day", "back",
+    }
+
+    # 找出stop words对应的列索引，置零
+    stop_indices = [i for i, w in enumerate(vocab) if w in LYRIC_STOP_WORDS]
+    print(f"Removing {len(stop_indices)} stop words from vocabulary")
+    count_matrix_filtered = count_matrix.tolil()
+    for idx in stop_indices:
+        count_matrix_filtered[:, idx] = 0
+    count_matrix_filtered = count_matrix_filtered.tocsr()
+
+    # ── 2.2 TF-IDF 加权（使用过滤后的矩阵）─────────
     print("Computing TF-IDF...")
     from sklearn.feature_extraction.text import TfidfTransformer
-    from sklearn.feature_selection import SelectKBest, chi2
 
     tfidf_transformer = TfidfTransformer(norm="l2", use_idf=True, smooth_idf=True)
-    tfidf_matrix = tfidf_transformer.fit_transform(count_matrix)
+    tfidf_matrix = tfidf_transformer.fit_transform(count_matrix_filtered)
 
-    # 选出方差最大的 max_vocab 个词（用词频总和作为proxy）
-    word_totals = np.asarray(count_matrix.sum(axis=0)).flatten()
+    # stop words列已为0，word_totals自然排在后面，不会被选中
+    word_totals = np.asarray(count_matrix_filtered.sum(axis=0)).flatten()
     top_indices = np.argsort(word_totals)[::-1][:max_vocab]
-    top_indices = np.sort(top_indices)  # 保持顺序
+    top_indices = np.sort(top_indices)
 
     selected_words = [vocab[i] for i in top_indices]
     tfidf_selected = tfidf_matrix[:, top_indices].toarray()
 
-    print(f"Selected {len(selected_words)} words (from {n_vocab} total)")
-    print(f"Top 20 words: {selected_words[:20]}")
+    print(f"Selected {len(selected_words)} content words (from {n_vocab} total)")
+    print(f"Top 20 words after stop word removal: {selected_words[:20]}")
 
     # ── 2.3 转成 DataFrame ────────────────────────
     col_names = [f"bow_{w}" for w in selected_words]
