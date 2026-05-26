@@ -422,7 +422,7 @@ def main():
     # ── Step 4: 训练 ──────────────────────────────────
     print("\n" + "="*50)
     print("Step 3: Training VAE")
-    history = train_vae(model, loader, epochs=EPOCHS, lr=LR, beta_max=0.5)
+    history = train_vae(model, loader, epochs=EPOCHS, lr=LR, beta_max=1.0)
     plot_training_history(history)
 
     # 保存模型权重
