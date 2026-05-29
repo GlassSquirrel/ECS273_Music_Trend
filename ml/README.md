@@ -38,9 +38,10 @@ The merged file `data/msd_mxm_merged.csv` (~107 MB) exceeds GitHub's file size
 limit and is not included in this repository. Please follow the steps below to
 generate it locally.
 
-1. Download the row data `msd_subset.csv` and musiXmatch files `mxm_dataset_train.txt` and `mxm_dataset_test.txt` to the `data/` folder.
-- MSD subset (`msd_subset.csv`)): Download from [http://millionsongdataset.com/pages/getting-dataset/](http://millionsongdataset.com/pages/getting-dataset/)
-- musicXmatch lyrics (`mxm_dataset_train.txt` and `mxm_dataset_test.txt`): Download from [http://labrosa.ee.columbia.edu/millionsong/musixmatch](http://labrosa.ee.columbia.edu/millionsong/musixmatch)
+1. Download the raw data `msd_subset.csv` and musiXmatch files `mxm_dataset_train.txt` and `mxm_dataset_test.txt` to the `data/` directory.
+    You can also download the raw data by yourself:
+    - MSD subset (`msd_subset.csv`)): Download from [the Million Song Dataset - Getting the dataset](http://millionsongdataset.com/pages/getting-dataset/)
+    - musicXmatch lyrics (`mxm_dataset_train.txt` and `mxm_dataset_test.txt`): Download from [the Million Song Dataset - The musiXmatch Dataset](http://labrosa.ee.columbia.edu/millionsong/musixmatch)
 2. Generate the merged dataset
 ```bash
 cd ml
