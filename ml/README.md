@@ -33,25 +33,37 @@ pip install -r requirements.txt
 
 in which, `kaleido` is optional and only needed for static PNG export in `visualize.py`.
 
-## Running the pipeline
+## Data setup
+The merged file `data/msd_mxm_merged.csv` (~107 MB) exceeds GitHub's file size
+limit and is not included in this repository. Please follow the steps below to
+generate it locally.
+
+1. Download the row data `msd_subset.csv` and musiXmatch files `mxm_dataset_train.txt` and `mxm_dataset_test.txt` to the `data/` folder.
+- MSD subset (`msd_subset.csv`)): Download from [http://millionsongdataset.com/pages/getting-dataset/](http://millionsongdataset.com/pages/getting-dataset/)
+- musicXmatch lyrics (`mxm_dataset_train.txt` and `mxm_dataset_test.txt`): Download from [http://labrosa.ee.columbia.edu/millionsong/musixmatch](http://labrosa.ee.columbia.edu/millionsong/musixmatch)
+2. Generate the merged dataset
+```bash
+cd ml
+python data_merge.py
+```
+3. Run data preprocessing
+```bash
+python data_preprocess.py
+```
+
+## Running the machine learning pipeline
 
 Run all scripts from the `ml/` directory.
 
 ```bash
-# Step 1 — only needs to run once unless the source data changes
-python data_merge.py
-
-# Step 2 — only needs to run again if you change stop words, MAX_VOCAB, or SVD dims
-python data_preprocess.py
-
-# Step 3 — re-run when you change VAE architecture, EPOCHS, LR, or LATENT_DIM
+# Step 1 — re-run when you change VAE architecture, EPOCHS, LR, or LATENT_DIM
 python train_vae.py
 
-# Step 4 — re-run when you change K or want to try a different cluster count
+# Step 2 — re-run when you change K or want to try a different cluster count
 python cluster.py            # auto-selects best K via Silhouette
 python cluster.py --k 5      # fix K=5, skip the search
 
-# Step 5 — re-run for new plots; UMAP is cached so it only recomputes once
+# Step 3 — re-run for new plots; UMAP is cached so it only recomputes once
 python visualize.py
 ```
 
