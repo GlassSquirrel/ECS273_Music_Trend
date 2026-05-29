@@ -7,20 +7,20 @@ Dataset (MSD) subset (10,000 tracks) fused with musiXmatch lyric database.
 
 It proceeds through five stages:
 
-1. **data_merge.py** — joins the MSD acoustic feature CSV with raw
+1. **data_merge.py**: joins the MSD acoustic feature CSV with raw
    musiXmatch Bag-of-Words lyric counts via shared track IDs.
-2. **data_preprocess.py** — standardises acoustic features; 
+2. **data_preprocess.py**: standardises acoustic features; 
    applies stop word removal, TF-IDF weighting, and TruncatedSVD 
    compression on lyric features; encodes artist tags as a multi-hot binary matrix.
    Rows with missing acoustic values are dropped first and the same
    row mask is applied to all modalities to keep all output arrays
    aligned by index.
-3. **train_vae.py** — trains a tri-modal Variational Autoencoder (VAE)
+3. **train_vae.py**: trains a tri-modal Variational Autoencoder (VAE)
    that fuses acoustic, lyric, and tag features into a shared 32-dimensional
    latent space, then extracts deterministic latent vectors for all tracks.
-4. **cluster.py** — sweeps K ∈ {3, ..., 10} using Silhouette score to find
+4. **cluster.py**: sweeps K ∈ {3, ..., 10} using Silhouette score to find
    the optimal number of clusters, then runs KMeans on the latent vectors.
-5. **visualize.py** — projects latent vectors into 3D via UMAP and renders
+5. **visualize.py**: projects latent vectors into 3D via UMAP and renders
    an interactive scatter plot and a ThemeRiver-style decade trend chart.
 
 ## Dependencies
