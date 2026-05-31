@@ -1,8 +1,10 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef } from "react";
 import * as d3 from "d3";
 import * as THREE from "three";
-import clusterPoints from "./clusterData.json";
-import wordCloudData from "./wordCloudData.json";
+import clusterPoints    from "./clusterData.json";
+import wordCloudData    from "./wordCloudData.json";
+import themeRiverData   from "./themeRiverData.json";
+import audioFeatureData from "./audioFeatureData.json";
 
 const CLUSTER_COLORS = [
   "#7F77DD",
@@ -20,50 +22,23 @@ const CLUSTER_LABELS = [
   "Cluster 4", "Cluster 5", "Cluster 6", "Cluster 7",
 ];
 
+const COLOR_ALL    = "#58A4B0";   // all-clusters overview color
 const AXIS_COLORS  = ["#b03030", "#2a9a50", "#2a62a8"];
 const AXIS_NAMES   = ["UMAP-1", "UMAP-2", "UMAP-3"];
 
-const YEARS = d3.range(1960, 2011);
-
-function generateThemeRiverData() {
-  const seeds = [
-    [40, 5, 8, 12, 3, 6, 4, 5],
-    [38, 8, 10, 14, 5, 8, 6, 4],
-    [35, 12, 12, 16, 7, 9, 7, 5],
-    [30, 18, 15, 16, 10, 11, 8, 7],
-    [25, 22, 18, 14, 14, 13, 10, 9],
-    [22, 26, 20, 12, 16, 14, 12, 10],
-    [20, 28, 22, 11, 18, 15, 13, 11],
-    [18, 26, 24, 12, 20, 17, 14, 12],
-    [15, 24, 26, 14, 22, 18, 16, 13],
-    [14, 22, 24, 16, 24, 20, 18, 14],
-  ];
-  return YEARS.map((year, i) => {
-    const base = seeds[Math.min(Math.floor(i / 5), seeds.length - 1)];
-    const row = { year };
-    CLUSTER_LABELS.forEach((_, ci) => {
-      row[`cluster_${ci}`] = Math.max(1, base[ci] + Math.round((Math.random() - 0.5) * 4));
-    });
-    return row;
-  });
+// Real per-cluster audio feature lookup (normalised to [0,1])
+function getFeatureData(clusterId) {
+  return audioFeatureData.features[String(clusterId)] ?? {};
 }
 
-function generateFeatureData(clusterId) {
-  const profiles = [
-    { energy: 0.72, danceability: 0.65, loudness: 0.68, acousticness: 0.22, valence: 0.60, tempo: 0.58 },
-    { energy: 0.55, danceability: 0.80, loudness: 0.55, acousticness: 0.30, valence: 0.75, tempo: 0.72 },
-    { energy: 0.85, danceability: 0.45, loudness: 0.82, acousticness: 0.10, valence: 0.40, tempo: 0.65 },
-    { energy: 0.40, danceability: 0.55, loudness: 0.35, acousticness: 0.75, valence: 0.55, tempo: 0.42 },
-    { energy: 0.68, danceability: 0.70, loudness: 0.62, acousticness: 0.20, valence: 0.68, tempo: 0.80 },
-    { energy: 0.60, danceability: 0.60, loudness: 0.58, acousticness: 0.45, valence: 0.50, tempo: 0.55 },
-    { energy: 0.78, danceability: 0.72, loudness: 0.75, acousticness: 0.15, valence: 0.62, tempo: 0.70 },
-    { energy: 0.50, danceability: 0.68, loudness: 0.52, acousticness: 0.55, valence: 0.65, tempo: 0.60 },
-  ];
-  return profiles[clusterId % profiles.length];
-}
+// Feature entries for the bar chart, labels sourced from the JSON
+const FEATURE_ENTRIES = Object.entries(audioFeatureData.display).map(
+  ([key, label]) => ({ key, label })
+);
 
 function getWordCloud(clusterId) {
-  return wordCloudData[String(clusterId)] ?? [];
+  const key = clusterId === null ? "all" : String(clusterId);
+  return wordCloudData[key] ?? [];
 }
 
 // ─── Soft-circle sprite texture ───────────────────────────────────────────────
@@ -720,20 +695,10 @@ export default function App() {
   const [hoveredYear,   setHoveredYear]   = useState(null);
   const [isFullscreen,  setIsFullscreen]  = useState(false);
 
-  const themeData = useMemo(() => generateThemeRiverData(), []);
-  const features  = generateFeatureData(activeCluster);
-  const words     = getWordCloud(activeCluster);
+  const features = getFeatureData(activeCluster ?? 0);
+  const words    = getWordCloud(activeCluster);
 
-  const featureEntries = [
-    { label: "Energy",        key: "energy" },
-    { label: "Danceability",  key: "danceability" },
-    { label: "Loudness",      key: "loudness" },
-    { label: "Acousticness",  key: "acousticness" },
-    { label: "Valence",       key: "valence" },
-    { label: "Tempo",         key: "tempo" },
-  ];
-
-  const clusterColor = CLUSTER_COLORS[activeCluster] ?? CLUSTER_COLORS[0];
+  const clusterColor = activeCluster !== null ? CLUSTER_COLORS[activeCluster] : COLOR_ALL;
 
   const handleClusterClick = i =>
     setActiveCluster(prev => prev === i ? null : i);
@@ -798,7 +763,7 @@ export default function App() {
                 </button>
               ))}
             </div>
-            <ThemeRiver data={themeData} activeCluster={activeCluster} onYearHover={setHoveredYear} />
+            <ThemeRiver data={themeRiverData} activeCluster={activeCluster} onYearHover={setHoveredYear} />
           </div>
 
           {/* Audio Features + Word Cloud */}
@@ -807,8 +772,8 @@ export default function App() {
               <div style={{ fontSize: 11, fontWeight: 500, color: "var(--color-text-secondary)", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 14 }}>
                 Audio features — {activeCluster !== null ? CLUSTER_LABELS[activeCluster] : "all clusters"}
               </div>
-              {featureEntries.map(({ label, key }) => (
-                <AudioFeatureBar key={key} label={label} value={features[key]} color={clusterColor} />
+              {FEATURE_ENTRIES.map(({ label, key }) => (
+                <AudioFeatureBar key={key} label={label} value={features[key] ?? 0} color={clusterColor} />
               ))}
             </div>
             <div style={{ background: "var(--color-background-primary)", border: "0.5px solid var(--color-border-tertiary)", borderRadius: "var(--border-radius-lg)", padding: "16px 20px" }}>
