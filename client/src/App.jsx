@@ -16,15 +16,12 @@ const CLUSTER_COLORS = [
 ];
 
 const CLUSTER_LABELS = [
-  "Cluster 0",
-  "Cluster 1",
-  "Cluster 2",
-  "Cluster 3",
-  "Cluster 4",
-  "Cluster 5",
-  "Cluster 6",
-  "Cluster 7",
+  "Cluster 0", "Cluster 1", "Cluster 2", "Cluster 3",
+  "Cluster 4", "Cluster 5", "Cluster 6", "Cluster 7",
 ];
+
+const AXIS_COLORS  = ["#b03030", "#2a9a50", "#2a62a8"];
+const AXIS_NAMES   = ["UMAP-1", "UMAP-2", "UMAP-3"];
 
 const YEARS = d3.range(1960, 2011);
 
@@ -42,8 +39,7 @@ function generateThemeRiverData() {
     [14, 22, 24, 16, 24, 20, 18, 14],
   ];
   return YEARS.map((year, i) => {
-    const decade = Math.floor(i / 5);
-    const base = seeds[Math.min(decade, seeds.length - 1)];
+    const base = seeds[Math.min(Math.floor(i / 5), seeds.length - 1)];
     const row = { year };
     CLUSTER_LABELS.forEach((_, ci) => {
       row[`cluster_${ci}`] = Math.max(1, base[ci] + Math.round((Math.random() - 0.5) * 4));
@@ -70,101 +66,152 @@ function getWordCloud(clusterId) {
   return wordCloudData[String(clusterId)] ?? [];
 }
 
-// ─── Soft circle texture for 3D points ───────────────────────────────────────
+// ─── Soft-circle sprite texture ───────────────────────────────────────────────
 function createPointTexture() {
-  const size = 64;
+  const sz = 64;
   const canvas = document.createElement("canvas");
-  canvas.width = size;
-  canvas.height = size;
+  canvas.width = sz; canvas.height = sz;
   const ctx = canvas.getContext("2d");
-  const gradient = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
-  gradient.addColorStop(0.0, "rgba(255,255,255,1.0)");
-  gradient.addColorStop(0.4, "rgba(255,255,255,0.9)");
-  gradient.addColorStop(0.8, "rgba(255,255,255,0.3)");
-  gradient.addColorStop(1.0, "rgba(255,255,255,0.0)");
-  ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, size, size);
+  const g = ctx.createRadialGradient(sz/2, sz/2, 0, sz/2, sz/2, sz/2);
+  g.addColorStop(0.00, "rgba(255,255,255,1.0)");
+  g.addColorStop(0.55, "rgba(255,255,255,0.95)");
+  g.addColorStop(0.78, "rgba(255,255,255,0.4)");
+  g.addColorStop(0.92, "rgba(255,255,255,0.05)");
+  g.addColorStop(1.00, "rgba(255,255,255,0.0)");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, sz, sz);
   return new THREE.CanvasTexture(canvas);
 }
 
-// ─── 3D Cluster Scatter (Three.js) ───────────────────────────────────────────
+// ─── 3-D Cluster Scatter ──────────────────────────────────────────────────────
 function ClusterScatter3D({ points, activeCluster, onClusterClick }) {
-  const containerRef = useRef(null);
-  const [tooltip, setTooltip] = useState(null);
-  const [isDraggingCursor, setIsDraggingCursor] = useState(false);
+  const containerRef    = useRef(null);
+  const axisLabelRefs   = useRef([null, null, null]);
+  const [tooltip, setTooltip]               = useState(null);
+  const [isDraggingCursor, setIsDragCursor] = useState(false);
   const activeClusterRef = useRef(activeCluster);
-  const onClickRef = useRef(onClusterClick);
+  const onClickRef       = useRef(onClusterClick);
 
   useEffect(() => { activeClusterRef.current = activeCluster; }, [activeCluster]);
-  useEffect(() => { onClickRef.current = onClusterClick; }, [onClusterClick]);
+  useEffect(() => { onClickRef.current = onClusterClick; },    [onClusterClick]);
 
   useEffect(() => {
     const container = containerRef.current;
     if (!container || !points.length) return;
 
     let mounted = true;
-    const W = container.clientWidth || 300;
-    const H = 340;
+    const W = container.clientWidth  || 300;
+    const H = container.clientHeight || 340;
 
-    // ── Scene & renderer ──────────────────────────────────────────────────────
+    // ── Scene ─────────────────────────────────────────────────────────────────
+    const BG = 0x080910;
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x0d0c0b);
+    scene.background = new THREE.Color(BG);
+    scene.fog = new THREE.FogExp2(BG, 0.022);
 
     const camera = new THREE.PerspectiveCamera(52, W / H, 0.1, 200);
-
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(W, H);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.domElement.style.display = "block";
     container.appendChild(renderer.domElement);
 
-    // ── Normalize coordinates to [-5, 5] ─────────────────────────────────────
-    const xs = points.map(p => p.x);
-    const ys = points.map(p => p.y);
-    const zs = points.map(p => p.z);
+    // ── Normalise coords ──────────────────────────────────────────────────────
+    const xs = points.map(p => p.x), ys = points.map(p => p.y), zs = points.map(p => p.z);
     const xMin = Math.min(...xs), xMax = Math.max(...xs);
     const yMin = Math.min(...ys), yMax = Math.max(...ys);
     const zMin = Math.min(...zs), zMax = Math.max(...zs);
-    const SPAN = 10;
+    const SPAN = 12, HALF = SPAN / 2;
     const norm = (v, mn, mx) => ((v - mn) / (mx - mn) - 0.5) * SPAN;
 
     const lookAt = new THREE.Vector3(0, 0, 0);
 
-    // ── Group points by cluster ───────────────────────────────────────────────
+    // ── Grid box (3 planes) ───────────────────────────────────────────────────
+    const applyGridMat = (g, opacity) => {
+      const setM = m => { m.transparent = true; m.opacity = opacity; m.depthWrite = false; };
+      Array.isArray(g.material) ? g.material.forEach(setM) : setM(g.material);
+      return g;
+    };
+
+    const gridFloor = new THREE.GridHelper(SPAN, 10, 0x1c2840, 0x121a28);
+    gridFloor.position.y = -HALF;
+    scene.add(applyGridMat(gridFloor, 0.55));
+
+    const gridBack = new THREE.GridHelper(SPAN, 10, 0x1c2840, 0x121a28);
+    gridBack.rotation.x = Math.PI / 2;
+    gridBack.position.z = -HALF;
+    scene.add(applyGridMat(gridBack, 0.35));
+
+    const gridLeft = new THREE.GridHelper(SPAN, 10, 0x1c2840, 0x121a28);
+    gridLeft.rotation.z = Math.PI / 2;
+    gridLeft.position.x = -HALF;
+    scene.add(applyGridMat(gridLeft, 0.35));
+
+    // ── Axis lines ────────────────────────────────────────────────────────────
+    const origin   = new THREE.Vector3(-HALF, -HALF, -HALF);
+    const AXLEN    = SPAN + 1.4;
+    const axisEnds = [
+      new THREE.Vector3(-HALF + AXLEN, -HALF,       -HALF      ),  // X
+      new THREE.Vector3(-HALF,         -HALF + AXLEN, -HALF      ),  // Y
+      new THREE.Vector3(-HALF,         -HALF,       -HALF + AXLEN),  // Z
+    ];
+    const axisHex = [0xaa2828, 0x28aa50, 0x2858aa];
+
+    axisEnds.forEach((end, i) => {
+      const geo = new THREE.BufferGeometry().setFromPoints([origin, end]);
+      const mat = new THREE.LineBasicMaterial({ color: axisHex[i], transparent: true, opacity: 0.72 });
+      scene.add(new THREE.Line(geo, mat));
+
+      // Small tick arrowhead — a thin cone at tip
+      const coneGeo = new THREE.ConeGeometry(0.12, 0.5, 6);
+      const coneMat = new THREE.MeshBasicMaterial({ color: axisHex[i], transparent: true, opacity: 0.75 });
+      const cone = new THREE.Mesh(coneGeo, coneMat);
+      cone.position.copy(end);
+      // Align cone along axis direction
+      if (i === 0) cone.rotation.z = -Math.PI / 2;
+      if (i === 2) cone.rotation.x =  Math.PI / 2;
+      scene.add(cone);
+    });
+
+    // Label world positions (slightly beyond arrow tip)
+    const LABEL_WORLD = axisEnds.map((e, i) => {
+      const v = e.clone();
+      if (i === 0) v.x += 0.5;
+      if (i === 1) v.y += 0.5;
+      if (i === 2) v.z += 0.5;
+      return v;
+    });
+    const projVec = new THREE.Vector3();
+
+    // ── Point clouds ──────────────────────────────────────────────────────────
+    const pointTex = createPointTexture();
     const clustersMap = {};
     for (const p of points) {
-      if (!clustersMap[p.cluster]) clustersMap[p.cluster] = [];
-      clustersMap[p.cluster].push(p);
+      (clustersMap[p.cluster] ??= []).push(p);
     }
 
-    // ── Shared circle texture ─────────────────────────────────────────────────
-    const pointTex = createPointTexture();
-
-    // ── Build one Points cloud per cluster ───────────────────────────────────
     const pointClouds = [];
-    const clusterIds = Object.keys(clustersMap).map(Number).sort();
-
-    for (const cid of clusterIds) {
+    for (const cid of Object.keys(clustersMap).map(Number).sort()) {
       const pts = clustersMap[cid];
       const geo = new THREE.BufferGeometry();
       const pos = new Float32Array(pts.length * 3);
-
       for (let i = 0; i < pts.length; i++) {
-        pos[i * 3]     = norm(pts[i].x, xMin, xMax);
-        pos[i * 3 + 1] = norm(pts[i].y, yMin, yMax);
-        pos[i * 3 + 2] = norm(pts[i].z, zMin, zMax);
+        pos[i*3]   = norm(pts[i].x, xMin, xMax);
+        pos[i*3+1] = norm(pts[i].y, yMin, yMax);
+        pos[i*3+2] = norm(pts[i].z, zMin, zMax);
       }
       geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
 
       const mat = new THREE.PointsMaterial({
         color: new THREE.Color(CLUSTER_COLORS[cid]),
-        size: 0.28,
+        size: 0.32,
         map: pointTex,
         sizeAttenuation: true,
         transparent: true,
-        opacity: 0.78,
+        opacity: 0.88,
         depthWrite: false,
-        alphaTest: 0.02,
+        alphaTest: 0.08,
+        blending: THREE.NormalBlending,
       });
 
       const cloud = new THREE.Points(geo, mat);
@@ -173,21 +220,10 @@ function ClusterScatter3D({ points, activeCluster, onClusterClick }) {
       pointClouds.push(cloud);
     }
 
-    // ── Subtle grid helper ────────────────────────────────────────────────────
-    const grid = new THREE.GridHelper(SPAN, 10, 0x1a1a18, 0x1a1a18);
-    grid.position.y = -SPAN / 2;
-    grid.material.opacity = 0.5;
-    grid.material.transparent = true;
-    scene.add(grid);
-
-    // ── Camera orbit state ────────────────────────────────────────────────────
-    let theta = 0.6;
-    let phi = 1.15;
-    let radius = 20;
-    let isDragging = false;
-    let lastX = 0, lastY = 0;
-    let autoRotate = true;
-    let resumeTimer = null;
+    // ── Orbit state ───────────────────────────────────────────────────────────
+    let theta = 0.6, phi = 1.15, radius = 18;
+    let isDragging = false, lastX = 0, lastY = 0;
+    let autoRotate = true, resumeTimer = null;
 
     const updateCamera = () => {
       camera.position.set(
@@ -199,94 +235,70 @@ function ClusterScatter3D({ points, activeCluster, onClusterClick }) {
     };
     updateCamera();
 
-    // ── Orbit & zoom handlers ─────────────────────────────────────────────────
     const pauseAutoRotate = () => {
       autoRotate = false;
       clearTimeout(resumeTimer);
       resumeTimer = setTimeout(() => { autoRotate = true; }, 3500);
     };
 
-    const onMouseDown = (e) => {
-      isDragging = true;
-      lastX = e.clientX;
-      lastY = e.clientY;
+    // ── Event handlers ────────────────────────────────────────────────────────
+    const onMouseDown = e => {
+      isDragging = true; lastX = e.clientX; lastY = e.clientY;
       pauseAutoRotate();
-      if (mounted) setIsDraggingCursor(true);
+      if (mounted) setIsDragCursor(true);
     };
-
-    const onMouseMove = (e) => {
+    const onMouseMove = e => {
       if (!isDragging) return;
       theta -= (e.clientX - lastX) * 0.007;
       phi = Math.max(0.12, Math.min(Math.PI - 0.12, phi - (e.clientY - lastY) * 0.007));
-      lastX = e.clientX;
-      lastY = e.clientY;
+      lastX = e.clientX; lastY = e.clientY;
       updateCamera();
       if (mounted) setTooltip(null);
     };
-
     const onMouseUp = () => {
       isDragging = false;
-      if (mounted) setIsDraggingCursor(false);
+      if (mounted) setIsDragCursor(false);
     };
-
-    const onWheel = (e) => {
+    const onWheel = e => {
       e.preventDefault();
-      radius = Math.max(9, Math.min(38, radius + e.deltaY * 0.04));
+      radius = Math.max(8, Math.min(40, radius + e.deltaY * 0.04));
       updateCamera();
       pauseAutoRotate();
     };
 
-    // ── Raycasting for hover & click ──────────────────────────────────────────
     const raycaster = new THREE.Raycaster();
-    raycaster.params.Points.threshold = 0.35;
+    raycaster.params.Points.threshold = 0.38;
     const mouse = new THREE.Vector2();
     let hoverTick = 0;
 
-    const onCanvasMouseMove = (e) => {
+    const onCanvasMouseMove = e => {
       if (isDragging) return;
-      hoverTick++;
-      if (hoverTick % 2 !== 0) return;
-
+      if (++hoverTick % 2 !== 0) return;
       const rect = renderer.domElement.getBoundingClientRect();
-      mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-      mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-      raycaster.setFromCamera(mouse, camera);
-
-      const hits = raycaster.intersectObjects(pointClouds);
-      if (hits.length > 0) {
-        const obj = hits[0].object;
-        const idx = hits[0].index;
-        const pt = obj.userData.pts[idx];
-        if (mounted) {
-          setTooltip({
-            x: e.clientX - rect.left,
-            y: e.clientY - rect.top,
-            title: pt.title || "—",
-            artist: pt.artist || "",
-            cluster: pt.cluster,
-            year: pt.year > 0 ? pt.year : null,
-          });
-        }
-      } else {
-        if (mounted) setTooltip(null);
-      }
-    };
-
-    const onCanvasClick = (e) => {
-      if (isDragging) return;
-      const rect = renderer.domElement.getBoundingClientRect();
-      mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-      mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      mouse.x =  ((e.clientX - rect.left) / rect.width)  * 2 - 1;
+      mouse.y = -((e.clientY - rect.top)  / rect.height) * 2 + 1;
       raycaster.setFromCamera(mouse, camera);
       const hits = raycaster.intersectObjects(pointClouds);
       if (hits.length > 0) {
-        const cid = hits[0].object.userData.clusterId;
-        onClickRef.current && onClickRef.current(cid);
-      }
+        const pt = hits[0].object.userData.pts[hits[0].index];
+        if (mounted) setTooltip({
+          x: e.clientX - rect.left,
+          y: e.clientY - rect.top,
+          title:   pt.title  || "—",
+          artist:  pt.artist || "",
+          cluster: pt.cluster,
+          year:    pt.year > 0 ? pt.year : null,
+        });
+      } else if (mounted) setTooltip(null);
     };
-
-    const onMouseLeave = () => {
-      if (mounted) setTooltip(null);
+    const onCanvasClick = e => {
+      if (isDragging) return;
+      const rect = renderer.domElement.getBoundingClientRect();
+      mouse.x =  ((e.clientX - rect.left) / rect.width)  * 2 - 1;
+      mouse.y = -((e.clientY - rect.top)  / rect.height) * 2 + 1;
+      raycaster.setFromCamera(mouse, camera);
+      const hits = raycaster.intersectObjects(pointClouds);
+      if (hits.length > 0) onClickRef.current?.(hits[0].object.userData.clusterId);
     };
 
     renderer.domElement.addEventListener("mousedown", onMouseDown);
@@ -295,33 +307,39 @@ function ClusterScatter3D({ points, activeCluster, onClusterClick }) {
     renderer.domElement.addEventListener("wheel", onWheel, { passive: false });
     renderer.domElement.addEventListener("mousemove", onCanvasMouseMove);
     renderer.domElement.addEventListener("click", onCanvasClick);
-    renderer.domElement.addEventListener("mouseleave", onMouseLeave);
+    renderer.domElement.addEventListener("mouseleave", () => mounted && setTooltip(null));
 
     // ── Animation loop ────────────────────────────────────────────────────────
     let animFrame;
     const animate = () => {
       animFrame = requestAnimationFrame(animate);
 
-      if (autoRotate) {
-        theta += 0.0025;
-        updateCamera();
-      }
+      if (autoRotate) { theta += 0.0025; updateCamera(); }
 
+      // Cluster opacity
       const ac = activeClusterRef.current;
       for (const cloud of pointClouds) {
+        const m = cloud.material;
         const cid = cloud.userData.clusterId;
-        const mat = cloud.material;
         if (ac === null) {
-          mat.opacity = 0.78;
-          mat.size = 0.28;
+          m.opacity = 0.88; m.size = 0.32;
         } else if (cid === ac) {
-          mat.opacity = 1.0;
-          mat.size = 0.36;
+          m.opacity = 1.00; m.size = 0.40;
         } else {
-          mat.opacity = 0.06;
-          mat.size = 0.20;
+          m.opacity = 0.12; m.size = 0.22;
         }
-        mat.needsUpdate = true;
+        m.needsUpdate = true;
+      }
+
+      // Axis label DOM positioning
+      for (let i = 0; i < 3; i++) {
+        const el = axisLabelRefs.current[i];
+        if (!el) continue;
+        projVec.copy(LABEL_WORLD[i]).project(camera);
+        if (projVec.z >= 1) { el.style.opacity = "0"; continue; }
+        el.style.left    = `${((projVec.x + 1) / 2) * W}px`;
+        el.style.top     = `${((1 - projVec.y) / 2) * H}px`;
+        el.style.opacity = "1";
       }
 
       renderer.render(scene, camera);
@@ -339,16 +357,10 @@ function ClusterScatter3D({ points, activeCluster, onClusterClick }) {
       renderer.domElement.removeEventListener("wheel", onWheel);
       renderer.domElement.removeEventListener("mousemove", onCanvasMouseMove);
       renderer.domElement.removeEventListener("click", onCanvasClick);
-      renderer.domElement.removeEventListener("mouseleave", onMouseLeave);
-      if (container.contains(renderer.domElement)) {
-        container.removeChild(renderer.domElement);
-      }
+      if (container.contains(renderer.domElement)) container.removeChild(renderer.domElement);
       renderer.dispose();
       pointTex.dispose();
-      for (const cloud of pointClouds) {
-        cloud.geometry.dispose();
-        cloud.material.dispose();
-      }
+      for (const c of pointClouds) { c.geometry.dispose(); c.material.dispose(); }
     };
   }, [points]);
 
@@ -358,18 +370,42 @@ function ClusterScatter3D({ points, activeCluster, onClusterClick }) {
       style={{
         position: "relative",
         width: "100%",
+        height: "100%",
         borderRadius: "var(--border-radius-md)",
         overflow: "hidden",
         cursor: isDraggingCursor ? "grabbing" : "grab",
-        background: "#0d0c0b",
+        background: "#080910",
       }}
     >
+      {/* Axis labels — positioned by animation loop */}
+      {AXIS_NAMES.map((name, i) => (
+        <span
+          key={name}
+          ref={el => axisLabelRefs.current[i] = el}
+          style={{
+            position: "absolute",
+            transform: "translate(-50%, -50%)",
+            fontSize: 10,
+            fontWeight: 600,
+            color: AXIS_COLORS[i],
+            pointerEvents: "none",
+            letterSpacing: "0.07em",
+            opacity: 0,
+            userSelect: "none",
+            textShadow: `0 0 10px ${AXIS_COLORS[i]}99`,
+          }}
+        >
+          {name}
+        </span>
+      ))}
+
+      {/* Hover tooltip */}
       {tooltip && (
         <div style={{
           position: "absolute",
-          left: Math.min(tooltip.x + 12, (containerRef.current?.clientWidth ?? 300) - 160),
-          top: Math.max(tooltip.y - 14, 4),
-          background: "rgba(13,12,11,0.93)",
+          left: Math.min(tooltip.x + 14, (containerRef.current?.clientWidth ?? 300) - 165),
+          top:  Math.max(tooltip.y - 14, 6),
+          background: "rgba(8,9,16,0.93)",
           border: `1px solid ${CLUSTER_COLORS[tooltip.cluster]}55`,
           borderRadius: "var(--border-radius-md)",
           padding: "7px 11px",
@@ -377,15 +413,15 @@ function ClusterScatter3D({ points, activeCluster, onClusterClick }) {
           lineHeight: 1.55,
           pointerEvents: "none",
           zIndex: 20,
-          maxWidth: 155,
+          maxWidth: 160,
           color: "#e0dfd9",
           backdropFilter: "blur(4px)",
         }}>
-          <div style={{ fontWeight: 500, marginBottom: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          <div style={{ fontWeight: 500, marginBottom: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {tooltip.title}
           </div>
           {tooltip.artist && (
-            <div style={{ color: "#888780", fontSize: 10, marginBottom: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            <div style={{ color: "#888780", fontSize: 10, marginBottom: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {tooltip.artist}
             </div>
           )}
@@ -394,31 +430,144 @@ function ClusterScatter3D({ points, activeCluster, onClusterClick }) {
             <span style={{ color: CLUSTER_COLORS[tooltip.cluster], fontSize: 10 }}>
               {CLUSTER_LABELS[tooltip.cluster]}
             </span>
-            {tooltip.year && (
-              <span style={{ color: "#666460", fontSize: 10, marginLeft: 2 }}>{tooltip.year}</span>
-            )}
+            {tooltip.year && <span style={{ color: "#555360", fontSize: 10, marginLeft: 2 }}>{tooltip.year}</span>}
           </div>
         </div>
       )}
 
-      {/* Interaction hint overlay */}
-      <div style={{
-        position: "absolute",
-        bottom: 8,
-        right: 10,
-        fontSize: 10,
-        color: "#444340",
-        pointerEvents: "none",
-        userSelect: "none",
-        letterSpacing: "0.04em",
-      }}>
+      {/* Hint */}
+      <div style={{ position: "absolute", bottom: 8, right: 10, fontSize: 10, color: "#2a2b35", pointerEvents: "none", userSelect: "none", letterSpacing: "0.04em" }}>
         drag · scroll
       </div>
     </div>
   );
 }
 
-// ─── ThemeRiver ──────────────────────────────────────────────────────────────
+// ─── Fullscreen Overlay ───────────────────────────────────────────────────────
+function FullscreenOverlay({ activeCluster, onClusterClick, onClose }) {
+  // Close on ESC
+  useEffect(() => {
+    const handler = e => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onClose]);
+
+  const clusterColor = CLUSTER_COLORS[activeCluster] ?? "#888780";
+
+  return (
+    <div
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+      style={{
+        position: "fixed", inset: 0, zIndex: 1000,
+        background: "rgba(4,4,8,0.92)",
+        display: "flex", flexDirection: "column",
+        alignItems: "center", justifyContent: "center",
+        animation: "fsIn 0.18s ease",
+        padding: "20px 24px",
+        gap: 16,
+      }}
+    >
+      {/* Top bar */}
+      <div style={{
+        width: "100%", maxWidth: 1100,
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        animation: "fsPanel 0.22s ease",
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <span style={{ fontSize: 13, fontWeight: 500, color: "#c8c7c0", letterSpacing: "0.04em" }}>
+            UMAP 3D — Song Clusters
+          </span>
+          {activeCluster !== null && (
+            <span style={{
+              fontSize: 11, color: clusterColor,
+              background: clusterColor + "18",
+              border: `0.5px solid ${clusterColor}55`,
+              borderRadius: 99, padding: "2px 9px",
+            }}>
+              ● {CLUSTER_LABELS[activeCluster]}
+            </span>
+          )}
+        </div>
+
+        {/* Close button */}
+        <button
+          onClick={onClose}
+          title="Close (Esc)"
+          style={{
+            background: "rgba(255,255,255,0.06)",
+            border: "0.5px solid rgba(255,255,255,0.14)",
+            borderRadius: 8,
+            color: "#c8c7c0",
+            width: 32, height: 32,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            cursor: "pointer",
+            fontSize: 14,
+            transition: "background 0.15s, border-color 0.15s",
+          }}
+          onMouseEnter={e => { e.currentTarget.style.background = "rgba(255,255,255,0.12)"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.28)"; }}
+          onMouseLeave={e => { e.currentTarget.style.background = "rgba(255,255,255,0.06)"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.14)"; }}
+        >
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+            <path d="M1 1L11 11M11 1L1 11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+          </svg>
+        </button>
+      </div>
+
+      {/* 3D canvas */}
+      <div style={{
+        width: "100%", maxWidth: 1100,
+        flex: 1, minHeight: 0,
+        borderRadius: 12,
+        overflow: "hidden",
+        border: "0.5px solid rgba(255,255,255,0.07)",
+        animation: "fsPanel 0.25s ease",
+      }}>
+        <ClusterScatter3D
+          points={clusterPoints}
+          activeCluster={activeCluster}
+          onClusterClick={onClusterClick}
+        />
+      </div>
+
+      {/* Cluster legend */}
+      <div style={{
+        display: "flex", flexWrap: "wrap", gap: "6px 12px",
+        justifyContent: "center",
+        animation: "fsPanel 0.28s ease",
+      }}>
+        {CLUSTER_LABELS.map((label, i) => (
+          <button
+            key={i}
+            onClick={() => onClusterClick(i)}
+            style={{
+              display: "flex", alignItems: "center", gap: 5,
+              fontSize: 12,
+              background: activeCluster === i ? CLUSTER_COLORS[i] + "22" : "rgba(255,255,255,0.04)",
+              border: activeCluster === i ? `0.5px solid ${CLUSTER_COLORS[i]}66` : "0.5px solid rgba(255,255,255,0.10)",
+              borderRadius: 99,
+              padding: "4px 12px 4px 8px",
+              cursor: "pointer",
+              color: activeCluster === i ? "#e0dfd9" : "#888780",
+              fontWeight: activeCluster === i ? 500 : 400,
+              opacity: activeCluster !== null && activeCluster !== i ? 0.45 : 1,
+              transition: "all 0.18s",
+            }}
+          >
+            <span style={{ width: 7, height: 7, borderRadius: 99, background: CLUSTER_COLORS[i], flexShrink: 0, display: "inline-block" }} />
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* ESC hint */}
+      <div style={{ fontSize: 10, color: "#333440", letterSpacing: "0.05em", userSelect: "none" }}>
+        Press Esc or click outside to close
+      </div>
+    </div>
+  );
+}
+
+// ─── ThemeRiver ───────────────────────────────────────────────────────────────
 function ThemeRiver({ data, activeCluster, onYearHover }) {
   const svgRef = useRef(null);
   const [tooltip, setTooltip] = useState(null);
@@ -442,13 +591,11 @@ function ThemeRiver({ data, activeCluster, onYearHover }) {
     const xScale = d3.scaleLinear()
       .domain([data[0].year, data[data.length - 1].year])
       .range([40, W - 20]);
-
     const yExtent = [
       d3.min(series, s => d3.min(s, d => d[0])),
       d3.max(series, s => d3.max(s, d => d[1])),
     ];
     const yScale = d3.scaleLinear().domain(yExtent).range([H - 20, 20]);
-
     const area = d3.area()
       .x(d => xScale(d.data.year))
       .y0(d => yScale(d[0]))
@@ -461,27 +608,21 @@ function ThemeRiver({ data, activeCluster, onYearHover }) {
       .join("path")
       .attr("d", area)
       .attr("fill", (_, i) => CLUSTER_COLORS[i])
-      .attr("opacity", (_, i) => {
-        if (activeCluster === null) return 0.82;
-        return i === activeCluster ? 1 : 0.18;
-      })
+      .attr("opacity", (_, i) => activeCluster === null ? 0.82 : i === activeCluster ? 1 : 0.18)
       .style("cursor", "crosshair")
       .on("mousemove", function (event, d) {
         const [mx] = d3.pointer(event, el);
         const year = Math.round(xScale.invert(mx));
-        const row = data.find(r => r.year === year);
+        const row  = data.find(r => r.year === year);
         if (row) {
           const ci = parseInt(d.key.split("_")[1]);
           setTooltip({ x: mx, y: event.offsetY, year, cluster: ci, value: row[d.key] });
-          onYearHover && onYearHover(year);
+          onYearHover?.(year);
         }
       })
-      .on("mouseleave", () => { setTooltip(null); onYearHover && onYearHover(null); });
+      .on("mouseleave", () => { setTooltip(null); onYearHover?.(null); });
 
-    const xAxis = d3.axisBottom(xScale)
-      .ticks(10)
-      .tickFormat(d3.format("d"))
-      .tickSize(0);
+    const xAxis = d3.axisBottom(xScale).ticks(10).tickFormat(d3.format("d")).tickSize(0);
     svg.append("g")
       .attr("transform", `translate(0,${H - 18})`)
       .call(xAxis)
@@ -496,17 +637,11 @@ function ThemeRiver({ data, activeCluster, onYearHover }) {
       <svg ref={svgRef} style={{ display: "block", width: "100%" }} />
       {tooltip && (
         <div style={{
-          position: "absolute",
-          left: tooltip.x + 12,
-          top: tooltip.y - 10,
+          position: "absolute", left: tooltip.x + 12, top: tooltip.y - 10,
           background: "var(--color-background-primary)",
           border: "0.5px solid var(--color-border-secondary)",
           borderRadius: "var(--border-radius-md)",
-          padding: "8px 12px",
-          fontSize: 12,
-          pointerEvents: "none",
-          zIndex: 10,
-          boxShadow: "none",
+          padding: "8px 12px", fontSize: 12, pointerEvents: "none", zIndex: 10,
         }}>
           <div style={{ fontWeight: 500, marginBottom: 4 }}>{tooltip.year}</div>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -526,13 +661,7 @@ function AudioFeatureBar({ label, value, color }) {
     <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
       <div style={{ width: 80, fontSize: 12, color: "var(--color-text-secondary)", textAlign: "right", flexShrink: 0 }}>{label}</div>
       <div style={{ flex: 1, height: 8, background: "var(--color-background-secondary)", borderRadius: 4, overflow: "hidden" }}>
-        <div style={{
-          height: "100%",
-          width: `${value * 100}%`,
-          background: color,
-          borderRadius: 4,
-          transition: "width 0.5s ease",
-        }} />
+        <div style={{ height: "100%", width: `${value * 100}%`, background: color, borderRadius: 4, transition: "width 0.5s ease" }} />
       </div>
       <div style={{ width: 32, fontSize: 12, fontWeight: 500, flexShrink: 0 }}>{value.toFixed(2)}</div>
     </div>
@@ -541,20 +670,16 @@ function AudioFeatureBar({ label, value, color }) {
 
 // ─── Word Cloud ───────────────────────────────────────────────────────────────
 function WordCloud({ words, color }) {
-  const sorted = [...words].sort((a, b) => b.w - a.w);
   return (
     <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 8px", alignItems: "baseline", minHeight: 80 }}>
-      {sorted.map(({ word, w }) => (
-        <span
-          key={word}
-          style={{
-            fontSize: `${Math.round(11 + w * 18)}px`,
-            fontWeight: w > 0.7 ? 500 : 400,
-            color: w > 0.65 ? color : "var(--color-text-secondary)",
-            lineHeight: 1.3,
-            transition: "all 0.4s ease",
-          }}
-        >
+      {[...words].sort((a, b) => b.w - a.w).map(({ word, w }) => (
+        <span key={word} style={{
+          fontSize: `${Math.round(11 + w * 18)}px`,
+          fontWeight: w > 0.7 ? 500 : 400,
+          color: w > 0.65 ? color : "var(--color-text-secondary)",
+          lineHeight: 1.3,
+          transition: "all 0.4s ease",
+        }}>
           {word}
         </span>
       ))}
@@ -562,61 +687,80 @@ function WordCloud({ words, color }) {
   );
 }
 
+// ─── Expand / Collapse icon buttons ──────────────────────────────────────────
+function IconBtn({ onClick, title, children, style }) {
+  const [hover, setHover] = useState(false);
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        background: hover ? "var(--color-background-secondary)" : "none",
+        border: "0.5px solid " + (hover ? "var(--color-border-secondary)" : "transparent"),
+        borderRadius: 6,
+        color: "var(--color-text-secondary)",
+        width: 26, height: 26,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        cursor: "pointer",
+        transition: "background 0.15s, border-color 0.15s",
+        flexShrink: 0,
+        ...style,
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
 // ─── Main App ─────────────────────────────────────────────────────────────────
 export default function App() {
   const [activeCluster, setActiveCluster] = useState(0);
-  const [hoveredYear, setHoveredYear] = useState(null);
+  const [hoveredYear,   setHoveredYear]   = useState(null);
+  const [isFullscreen,  setIsFullscreen]  = useState(false);
 
   const themeData = useMemo(() => generateThemeRiverData(), []);
-  const features = generateFeatureData(activeCluster);
-  const words = getWordCloud(activeCluster);
+  const features  = generateFeatureData(activeCluster);
+  const words     = getWordCloud(activeCluster);
 
   const featureEntries = [
-    { label: "Energy", key: "energy" },
-    { label: "Danceability", key: "danceability" },
-    { label: "Loudness", key: "loudness" },
-    { label: "Acousticness", key: "acousticness" },
-    { label: "Valence", key: "valence" },
-    { label: "Tempo", key: "tempo" },
+    { label: "Energy",        key: "energy" },
+    { label: "Danceability",  key: "danceability" },
+    { label: "Loudness",      key: "loudness" },
+    { label: "Acousticness",  key: "acousticness" },
+    { label: "Valence",       key: "valence" },
+    { label: "Tempo",         key: "tempo" },
   ];
 
   const clusterColor = CLUSTER_COLORS[activeCluster] ?? CLUSTER_COLORS[0];
 
+  const handleClusterClick = i =>
+    setActiveCluster(prev => prev === i ? null : i);
+
   return (
-    <div style={{
-      fontFamily: "var(--font-sans)",
-      background: "var(--color-background-tertiary)",
-      minHeight: "100vh",
-      padding: "0 0 2rem",
-    }}>
-      {/* Header */}
+    <div style={{ fontFamily: "var(--font-sans)", background: "var(--color-background-tertiary)", minHeight: "100vh", padding: "0 0 2rem" }}>
+
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div style={{
         background: "var(--color-background-primary)",
         borderBottom: "0.5px solid var(--color-border-tertiary)",
         padding: "14px 24px",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
+        display: "flex", alignItems: "center", justifyContent: "space-between",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
           <h1 style={{ fontSize: 16, fontWeight: 500, margin: 0 }}>Multi-modal Music Trend Analysis</h1>
           <span style={{
-            fontSize: 12,
-            color: "var(--color-text-secondary)",
+            fontSize: 12, color: "var(--color-text-secondary)",
             background: "var(--color-background-secondary)",
             border: "0.5px solid var(--color-border-tertiary)",
-            borderRadius: "var(--border-radius-md)",
-            padding: "2px 10px",
+            borderRadius: "var(--border-radius-md)", padding: "2px 10px",
           }}>1960 – 2010</span>
         </div>
         <div style={{
-          fontSize: 13,
-          padding: "5px 14px",
-          borderRadius: 99,
+          fontSize: 13, padding: "5px 14px", borderRadius: 99,
           border: `0.5px solid ${clusterColor}`,
-          background: clusterColor + "18",
-          color: clusterColor,
-          fontWeight: 500,
+          background: clusterColor + "18", color: clusterColor, fontWeight: 500,
         }}>
           Audio + Lyrics
         </div>
@@ -624,107 +768,65 @@ export default function App() {
 
       <div style={{ padding: "20px 24px", display: "grid", gridTemplateColumns: "1fr 320px", gap: 16 }}>
 
-        {/* LEFT COLUMN */}
+        {/* ── LEFT COLUMN ──────────────────────────────────────────────────── */}
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
 
-          {/* ThemeRiver Card */}
+          {/* ThemeRiver */}
           <div style={{
             background: "var(--color-background-primary)",
             border: "0.5px solid var(--color-border-tertiary)",
-            borderRadius: "var(--border-radius-lg)",
-            padding: "16px 20px",
+            borderRadius: "var(--border-radius-lg)", padding: "16px 20px",
           }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
               <div style={{ fontSize: 11, fontWeight: 500, color: "var(--color-text-secondary)", letterSpacing: "0.06em", textTransform: "uppercase" }}>
                 ThemeRiver — cluster trends, 1960–2010
               </div>
-              {hoveredYear && (
-                <span style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>year: {hoveredYear}</span>
-              )}
+              {hoveredYear && <span style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>year: {hoveredYear}</span>}
             </div>
-
-            {/* Legend */}
             <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 14px", marginBottom: 12 }}>
               {CLUSTER_LABELS.map((label, i) => (
-                <button
-                  key={i}
-                  onClick={() => setActiveCluster(activeCluster === i ? null : i)}
-                  style={{
-                    display: "flex", alignItems: "center", gap: 5,
-                    fontSize: 12,
-                    background: "none", border: "none", cursor: "pointer", padding: 0,
-                    color: activeCluster === i ? "var(--color-text-primary)" : "var(--color-text-secondary)",
-                    fontWeight: activeCluster === i ? 500 : 400,
-                    opacity: activeCluster !== null && activeCluster !== i ? 0.5 : 1,
-                    transition: "all 0.2s",
-                  }}
-                >
+                <button key={i} onClick={() => handleClusterClick(i)} style={{
+                  display: "flex", alignItems: "center", gap: 5, fontSize: 12,
+                  background: "none", border: "none", cursor: "pointer", padding: 0,
+                  color: activeCluster === i ? "var(--color-text-primary)" : "var(--color-text-secondary)",
+                  fontWeight: activeCluster === i ? 500 : 400,
+                  opacity: activeCluster !== null && activeCluster !== i ? 0.5 : 1,
+                  transition: "all 0.2s",
+                }}>
                   <span style={{ width: 8, height: 8, borderRadius: 2, background: CLUSTER_COLORS[i], flexShrink: 0 }} />
                   {label}
                 </button>
               ))}
             </div>
-
-            <ThemeRiver
-              data={themeData}
-              activeCluster={activeCluster}
-              onYearHover={setHoveredYear}
-            />
+            <ThemeRiver data={themeData} activeCluster={activeCluster} onYearHover={setHoveredYear} />
           </div>
 
-          {/* Bottom row: Audio Features + Word Cloud */}
+          {/* Audio Features + Word Cloud */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-
-            {/* Audio Features */}
-            <div style={{
-              background: "var(--color-background-primary)",
-              border: "0.5px solid var(--color-border-tertiary)",
-              borderRadius: "var(--border-radius-lg)",
-              padding: "16px 20px",
-            }}>
+            <div style={{ background: "var(--color-background-primary)", border: "0.5px solid var(--color-border-tertiary)", borderRadius: "var(--border-radius-lg)", padding: "16px 20px" }}>
               <div style={{ fontSize: 11, fontWeight: 500, color: "var(--color-text-secondary)", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 14 }}>
                 Audio features — {activeCluster !== null ? CLUSTER_LABELS[activeCluster] : "all clusters"}
               </div>
               {featureEntries.map(({ label, key }) => (
-                <AudioFeatureBar
-                  key={key}
-                  label={label}
-                  value={features[key]}
-                  color={clusterColor}
-                />
+                <AudioFeatureBar key={key} label={label} value={features[key]} color={clusterColor} />
               ))}
             </div>
-
-            {/* Word Cloud */}
-            <div style={{
-              background: "var(--color-background-primary)",
-              border: "0.5px solid var(--color-border-tertiary)",
-              borderRadius: "var(--border-radius-lg)",
-              padding: "16px 20px",
-            }}>
+            <div style={{ background: "var(--color-background-primary)", border: "0.5px solid var(--color-border-tertiary)", borderRadius: "var(--border-radius-lg)", padding: "16px 20px" }}>
               <div style={{ fontSize: 11, fontWeight: 500, color: "var(--color-text-secondary)", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 14 }}>
                 Artist tags — {activeCluster !== null ? CLUSTER_LABELS[activeCluster] : "all clusters"}
               </div>
               <WordCloud words={words} color={clusterColor} />
             </div>
-
           </div>
         </div>
 
-        {/* RIGHT COLUMN */}
+        {/* ── RIGHT COLUMN ─────────────────────────────────────────────────── */}
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
 
-          {/* Stats cards */}
+          {/* Stats */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-            {[
-              { label: "Songs", value: "~10K", sub: "1960–2010" },
-              { label: "Modalities", value: "2", sub: "audio + lyrics" },
-            ].map(({ label, value, sub }) => (
-              <div key={label} style={{
-                background: "var(--color-background-secondary)",
-                borderRadius: "var(--border-radius-md)",
-                padding: "12px 14px",
-              }}>
+            {[{ label: "Songs", value: "~10K", sub: "1960–2010" }, { label: "Modalities", value: "2", sub: "audio + lyrics" }].map(({ label, value, sub }) => (
+              <div key={label} style={{ background: "var(--color-background-secondary)", borderRadius: "var(--border-radius-md)", padding: "12px 14px" }}>
                 <div style={{ fontSize: 11, color: "var(--color-text-secondary)", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</div>
                 <div style={{ fontSize: 24, fontWeight: 500, lineHeight: 1 }}>{value}</div>
                 <div style={{ fontSize: 11, color: clusterColor, marginTop: 4 }}>{sub}</div>
@@ -739,68 +841,67 @@ export default function App() {
             borderRadius: "var(--border-radius-lg)",
             padding: "16px 20px",
             flex: 1,
-            display: "flex",
-            flexDirection: "column",
-            gap: 12,
+            display: "flex", flexDirection: "column", gap: 12,
           }}>
             {/* Card header */}
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <div style={{ fontSize: 11, fontWeight: 500, color: "var(--color-text-secondary)", letterSpacing: "0.06em", textTransform: "uppercase" }}>
                 UMAP 3D — song clusters
               </div>
-              <div style={{
-                fontSize: 10,
-                color: "var(--color-text-secondary)",
-                background: "var(--color-background-secondary)",
-                border: "0.5px solid var(--color-border-tertiary)",
-                borderRadius: 99,
-                padding: "2px 8px",
-                letterSpacing: "0.03em",
-              }}>
-                {activeCluster !== null ? (
-                  <span style={{ color: clusterColor }}>● {CLUSTER_LABELS[activeCluster]}</span>
-                ) : (
-                  "all clusters"
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                {activeCluster !== null && (
+                  <span style={{ fontSize: 10, color: clusterColor }}>
+                    ● {CLUSTER_LABELS[activeCluster]}
+                  </span>
                 )}
+                {/* Expand to fullscreen */}
+                <IconBtn onClick={() => setIsFullscreen(true)} title="Expand to fullscreen">
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                    <path d="M1 4.5V1H4.5M7.5 1H11V4.5M11 7.5V11H7.5M4.5 11H1V7.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </IconBtn>
               </div>
             </div>
 
-            {/* 3D scatter */}
-            <ClusterScatter3D
-              points={clusterPoints}
-              activeCluster={activeCluster}
-              onClusterClick={i => setActiveCluster(activeCluster === i ? null : i)}
-            />
+            {/* Compact 3D view */}
+            <div style={{ height: 300 }}>
+              <ClusterScatter3D
+                points={clusterPoints}
+                activeCluster={activeCluster}
+                onClusterClick={handleClusterClick}
+              />
+            </div>
 
             {/* Cluster swatches */}
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "5px 10px" }}>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "5px 8px" }}>
               {CLUSTER_LABELS.map((label, i) => (
-                <button
-                  key={i}
-                  onClick={() => setActiveCluster(activeCluster === i ? null : i)}
-                  style={{
-                    display: "flex", alignItems: "center", gap: 4,
-                    fontSize: 11,
-                    background: activeCluster === i ? CLUSTER_COLORS[i] + "18" : "none",
-                    border: activeCluster === i ? `0.5px solid ${CLUSTER_COLORS[i]}55` : "0.5px solid transparent",
-                    borderRadius: 99,
-                    padding: "2px 7px 2px 5px",
-                    cursor: "pointer",
-                    color: activeCluster === i ? "var(--color-text-primary)" : "var(--color-text-secondary)",
-                    fontWeight: activeCluster === i ? 500 : 400,
-                    opacity: activeCluster !== null && activeCluster !== i ? 0.45 : 1,
-                    transition: "all 0.2s",
-                  }}
-                >
+                <button key={i} onClick={() => handleClusterClick(i)} style={{
+                  display: "flex", alignItems: "center", gap: 4, fontSize: 11,
+                  background: activeCluster === i ? CLUSTER_COLORS[i] + "18" : "none",
+                  border: activeCluster === i ? `0.5px solid ${CLUSTER_COLORS[i]}55` : "0.5px solid transparent",
+                  borderRadius: 99, padding: "2px 7px 2px 5px", cursor: "pointer",
+                  color: activeCluster === i ? "var(--color-text-primary)" : "var(--color-text-secondary)",
+                  fontWeight: activeCluster === i ? 500 : 400,
+                  opacity: activeCluster !== null && activeCluster !== i ? 0.45 : 1,
+                  transition: "all 0.2s",
+                }}>
                   <span style={{ width: 6, height: 6, borderRadius: 99, background: CLUSTER_COLORS[i], display: "inline-block", flexShrink: 0 }} />
                   {label}
                 </button>
               ))}
             </div>
           </div>
-
         </div>
       </div>
+
+      {/* ── Fullscreen overlay ────────────────────────────────────────────── */}
+      {isFullscreen && (
+        <FullscreenOverlay
+          activeCluster={activeCluster}
+          onClusterClick={handleClusterClick}
+          onClose={() => setIsFullscreen(false)}
+        />
+      )}
     </div>
   );
 }
