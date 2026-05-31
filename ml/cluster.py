@@ -41,7 +41,7 @@ RESULTS_DIR  = "results"
 FIGURES_DIR  = os.path.join(RESULTS_DIR, "figures")  # output folder for all plots
 LATENT_PATH  = os.path.join(RESULTS_DIR, "latent_vectors.npy")
 META_PATH    = "../data/processed/meta.csv"
-K_RANGE      = range(3, 11)      # K values to evaluate during search
+K_RANGE      = range(4, 11)      # K values to evaluate during search
 RANDOM_SEED  = 42
 
 logger = setup_logger("cluster")
