@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import * as d3 from "d3";
 import * as THREE from "three";
 import clusterPoints from "./clusterData.json";
+import wordCloudData from "./wordCloudData.json";
 
 const CLUSTER_COLORS = [
   "#7F77DD",
@@ -65,18 +66,8 @@ function generateFeatureData(clusterId) {
   return profiles[clusterId % profiles.length];
 }
 
-function generateWordCloud(clusterId) {
-  const clouds = [
-    [{ word: "love", w: 0.92 }, { word: "heart", w: 0.80 }, { word: "baby", w: 0.75 }, { word: "night", w: 0.68 }, { word: "feel", w: 0.60 }, { word: "soul", w: 0.55 }, { word: "dream", w: 0.50 }, { word: "dance", w: 0.45 }, { word: "sweet", w: 0.40 }, { word: "time", w: 0.35 }, { word: "gone", w: 0.30 }, { word: "rain", w: 0.28 }],
-    [{ word: "yeah", w: 0.88 }, { word: "gonna", w: 0.78 }, { word: "rock", w: 0.72 }, { word: "roll", w: 0.65 }, { word: "free", w: 0.60 }, { word: "road", w: 0.52 }, { word: "wild", w: 0.48 }, { word: "fire", w: 0.44 }, { word: "ride", w: 0.38 }, { word: "hard", w: 0.33 }, { word: "loud", w: 0.28 }, { word: "burn", w: 0.24 }],
-    [{ word: "street", w: 0.90 }, { word: "money", w: 0.82 }, { word: "real", w: 0.74 }, { word: "life", w: 0.68 }, { word: "world", w: 0.61 }, { word: "game", w: 0.55 }, { word: "power", w: 0.49 }, { word: "hustle", w: 0.44 }, { word: "grind", w: 0.38 }, { word: "flow", w: 0.32 }, { word: "rise", w: 0.27 }, { word: "truth", w: 0.22 }],
-    [{ word: "blue", w: 0.85 }, { word: "gone", w: 0.76 }, { word: "lonesome", w: 0.70 }, { word: "cry", w: 0.63 }, { word: "miss", w: 0.57 }, { word: "pain", w: 0.51 }, { word: "tears", w: 0.45 }, { word: "home", w: 0.40 }, { word: "alone", w: 0.35 }, { word: "cold", w: 0.30 }, { word: "dark", w: 0.26 }, { word: "hurt", w: 0.22 }],
-    [{ word: "dance", w: 0.91 }, { word: "groove", w: 0.83 }, { word: "beat", w: 0.76 }, { word: "move", w: 0.69 }, { word: "feel", w: 0.62 }, { word: "rhythm", w: 0.55 }, { word: "music", w: 0.50 }, { word: "floor", w: 0.44 }, { word: "night", w: 0.38 }, { word: "bass", w: 0.33 }, { word: "party", w: 0.28 }, { word: "body", w: 0.24 }],
-    [{ word: "peace", w: 0.87 }, { word: "soul", w: 0.78 }, { word: "earth", w: 0.71 }, { word: "spirit", w: 0.64 }, { word: "grace", w: 0.58 }, { word: "light", w: 0.51 }, { word: "lord", w: 0.46 }, { word: "bless", w: 0.40 }, { word: "holy", w: 0.35 }, { word: "pray", w: 0.30 }, { word: "faith", w: 0.25 }, { word: "joy", w: 0.21 }],
-    [{ word: "stars", w: 0.89 }, { word: "sky", w: 0.79 }, { word: "fly", w: 0.72 }, { word: "high", w: 0.65 }, { word: "dream", w: 0.58 }, { word: "shine", w: 0.52 }, { word: "bright", w: 0.46 }, { word: "wonder", w: 0.41 }, { word: "soar", w: 0.36 }, { word: "glow", w: 0.31 }, { word: "rise", w: 0.26 }, { word: "above", w: 0.21 }],
-    [{ word: "soul", w: 0.88 }, { word: "river", w: 0.79 }, { word: "gospel", w: 0.71 }, { word: "sing", w: 0.65 }, { word: "brother", w: 0.58 }, { word: "praise", w: 0.52 }, { word: "freedom", w: 0.46 }, { word: "joy", w: 0.41 }, { word: "spirit", w: 0.36 }, { word: "amen", w: 0.30 }, { word: "glory", w: 0.25 }, { word: "love", w: 0.22 }],
-  ];
-  return clouds[clusterId % clouds.length];
+function getWordCloud(clusterId) {
+  return wordCloudData[String(clusterId)] ?? [];
 }
 
 // ─── Soft circle texture for 3D points ───────────────────────────────────────
@@ -578,7 +569,7 @@ export default function App() {
 
   const themeData = useMemo(() => generateThemeRiverData(), []);
   const features = generateFeatureData(activeCluster);
-  const words = generateWordCloud(activeCluster);
+  const words = getWordCloud(activeCluster);
 
   const featureEntries = [
     { label: "Energy", key: "energy" },
@@ -712,7 +703,7 @@ export default function App() {
               padding: "16px 20px",
             }}>
               <div style={{ fontSize: 11, fontWeight: 500, color: "var(--color-text-secondary)", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 14 }}>
-                Top lyric words — {activeCluster !== null ? CLUSTER_LABELS[activeCluster] : "all clusters"}
+                Artist tags — {activeCluster !== null ? CLUSTER_LABELS[activeCluster] : "all clusters"}
               </div>
               <WordCloud words={words} color={clusterColor} />
             </div>
