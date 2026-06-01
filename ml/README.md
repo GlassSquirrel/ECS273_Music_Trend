@@ -18,7 +18,7 @@ It proceeds through five stages:
 3. **train_vae.py**: trains a tri-modal Variational Autoencoder (VAE)
    that fuses acoustic, lyric, and tag features into a shared 32-dimensional
    latent space, then extracts deterministic latent vectors for all tracks.
-4. **cluster.py**: sweeps K ∈ {3, ..., 10} using Silhouette score to find
+4. **cluster.py**: sweeps K ∈ {4, ..., 10} using Silhouette score to find
    the optimal number of clusters, then runs KMeans on the latent vectors.
 5. **visualize.py**: projects latent vectors into 3D via UMAP and renders
    an interactive scatter plot and a ThemeRiver-style decade trend chart.
@@ -58,14 +58,14 @@ python data_preprocess.py
 Run all scripts from the `ml/` directory.
 
 ```bash
-# Step 1 — re-run when you change VAE architecture, EPOCHS, LR, or LATENT_DIM
+# Step 1: re-run when you change VAE architecture, EPOCHS, LR, or LATENT_DIM
 python train_vae.py
 
-# Step 2 — re-run when you change K or want to try a different cluster count
+# Step 2: re-run when you change K or want to try a different cluster count
 python cluster.py            # auto-selects best K via Silhouette
-python cluster.py --k 5      # fix K=5, skip the search
+python cluster.py --k 8      # fix K=8, skip the search
 
-# Step 3 — re-run for new plots; UMAP is cached so it only recomputes once
+# Step 3: re-run for new plots; UMAP is cached so it only recomputes once
 python visualize.py
 ```
 
