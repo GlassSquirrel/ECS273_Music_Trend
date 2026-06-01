@@ -1,10 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import * as d3 from "d3";
 import * as THREE from "three";
-import clusterPoints    from "./clusterData.json";
-import wordCloudData    from "./wordCloudData.json";
-import themeRiverData   from "./themeRiverData.json";
-import audioFeatureData from "./audioFeatureData.json";
+import { fetchDashboardData } from "./api";
 
 const CLUSTER_COLORS = [
   "#7F77DD",
@@ -26,17 +23,28 @@ const COLOR_ALL    = "#58A4B0";   // all-clusters overview color
 const AXIS_COLORS  = ["#b03030", "#2a9a50", "#2a62a8"];
 const AXIS_NAMES   = ["UMAP-1", "UMAP-2", "UMAP-3"];
 
-// Real per-cluster audio feature lookup (normalised to [0,1])
-function getFeatureData(clusterId) {
-  return audioFeatureData.features[String(clusterId)] ?? {};
+const EMPTY_AUDIO_FEATURES = {
+  features: {},
+  display: {},
+};
+
+const EMPTY_DASHBOARD_DATA = {
+  clusterData: [],
+  themeRiverData: [],
+  audioFeatureData: EMPTY_AUDIO_FEATURES,
+  wordCloudData: {},
+  stats: {
+    totalSongs: 0,
+    clusteredSongs: 0,
+    clusters: 0,
+  },
+};
+
+function getFeatureData(audioFeatureData, clusterId) {
+  return audioFeatureData.features?.[String(clusterId)] ?? {};
 }
 
-// Feature entries for the bar chart, labels sourced from the JSON
-const FEATURE_ENTRIES = Object.entries(audioFeatureData.display).map(
-  ([key, label]) => ({ key, label })
-);
-
-function getWordCloud(clusterId) {
+function getWordCloud(wordCloudData, clusterId) {
   const key = clusterId === null ? "all" : String(clusterId);
   return wordCloudData[key] ?? [];
 }
@@ -419,7 +427,7 @@ function ClusterScatter3D({ points, activeCluster, onClusterClick }) {
 }
 
 // ─── Fullscreen Overlay ───────────────────────────────────────────────────────
-function FullscreenOverlay({ activeCluster, onClusterClick, onClose }) {
+function FullscreenOverlay({ points, activeCluster, onClusterClick, onClose }) {
   // Close on ESC
   useEffect(() => {
     const handler = e => { if (e.key === "Escape") onClose(); };
@@ -498,7 +506,7 @@ function FullscreenOverlay({ activeCluster, onClusterClick, onClose }) {
         animation: "fsPanel 0.25s ease",
       }}>
         <ClusterScatter3D
-          points={clusterPoints}
+          points={points}
           activeCluster={activeCluster}
           onClusterClick={onClusterClick}
         />
@@ -694,14 +702,92 @@ export default function App() {
   const [activeCluster, setActiveCluster] = useState(0);
   const [hoveredYear,   setHoveredYear]   = useState(null);
   const [isFullscreen,  setIsFullscreen]  = useState(false);
+  const [dashboardData, setDashboardData] = useState(EMPTY_DASHBOARD_DATA);
+  const [loadState, setLoadState] = useState({ isLoading: true, error: null });
 
-  const features = getFeatureData(activeCluster ?? 0);
-  const words    = getWordCloud(activeCluster);
+  useEffect(() => {
+    let ignore = false;
+
+    async function load() {
+      try {
+        const payload = await fetchDashboardData();
+        if (ignore) return;
+        setDashboardData({
+          clusterData: payload.clusterData ?? [],
+          themeRiverData: payload.themeRiverData ?? [],
+          audioFeatureData: payload.audioFeatureData ?? EMPTY_AUDIO_FEATURES,
+          wordCloudData: payload.wordCloudData ?? {},
+          stats: payload.stats ?? EMPTY_DASHBOARD_DATA.stats,
+        });
+        setLoadState({ isLoading: false, error: null });
+      } catch (error) {
+        if (ignore) return;
+        setLoadState({
+          isLoading: false,
+          error: error.message || "Failed to load dashboard data.",
+        });
+      }
+    }
+
+    load();
+    return () => { ignore = true; };
+  }, []);
+
+  const { clusterData, themeRiverData, audioFeatureData, wordCloudData, stats } = dashboardData;
+  const featureEntries = Object.entries(audioFeatureData.display ?? {}).map(
+    ([key, label]) => ({ key, label }),
+  );
+  const features = getFeatureData(audioFeatureData, activeCluster ?? 0);
+  const words = getWordCloud(wordCloudData, activeCluster);
 
   const clusterColor = activeCluster !== null ? CLUSTER_COLORS[activeCluster] : COLOR_ALL;
 
   const handleClusterClick = i =>
     setActiveCluster(prev => prev === i ? null : i);
+
+  if (loadState.isLoading) {
+    return (
+      <div style={{
+        minHeight: "100vh",
+        display: "grid",
+        placeItems: "center",
+        background: "var(--color-background-tertiary)",
+        fontFamily: "var(--font-sans)",
+        color: "var(--color-text-secondary)",
+      }}>
+        Loading dashboard data...
+      </div>
+    );
+  }
+
+  if (loadState.error) {
+    return (
+      <div style={{
+        minHeight: "100vh",
+        display: "grid",
+        placeItems: "center",
+        background: "var(--color-background-tertiary)",
+        fontFamily: "var(--font-sans)",
+        padding: 24,
+      }}>
+        <div style={{
+          maxWidth: 560,
+          background: "var(--color-background-primary)",
+          border: "0.5px solid var(--color-border-tertiary)",
+          borderRadius: "var(--border-radius-lg)",
+          padding: 24,
+          color: "var(--color-text-primary)",
+        }}>
+          <div style={{ fontSize: 15, fontWeight: 500, marginBottom: 8 }}>
+            Failed to load dashboard data
+          </div>
+          <div style={{ color: "var(--color-text-secondary)", fontSize: 13, lineHeight: 1.5 }}>
+            {loadState.error}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ fontFamily: "var(--font-sans)", background: "var(--color-background-tertiary)", minHeight: "100vh", padding: "0 0 2rem" }}>
@@ -772,7 +858,7 @@ export default function App() {
               <div style={{ fontSize: 11, fontWeight: 500, color: "var(--color-text-secondary)", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 14 }}>
                 Audio features — {activeCluster !== null ? CLUSTER_LABELS[activeCluster] : "all clusters"}
               </div>
-              {FEATURE_ENTRIES.map(({ label, key }) => (
+              {featureEntries.map(({ label, key }) => (
                 <AudioFeatureBar key={key} label={label} value={features[key] ?? 0} color={clusterColor} />
               ))}
             </div>
@@ -790,7 +876,10 @@ export default function App() {
 
           {/* Stats */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-            {[{ label: "Songs", value: "~10K", sub: "1960–2010" }, { label: "Modalities", value: "2", sub: "audio + lyrics" }].map(({ label, value, sub }) => (
+            {[
+              { label: "Songs", value: stats.totalSongs.toLocaleString(), sub: `${stats.clusteredSongs.toLocaleString()} clustered` },
+              { label: "Clusters", value: String(stats.clusters), sub: "audio + lyrics" },
+            ].map(({ label, value, sub }) => (
               <div key={label} style={{ background: "var(--color-background-secondary)", borderRadius: "var(--border-radius-md)", padding: "12px 14px" }}>
                 <div style={{ fontSize: 11, color: "var(--color-text-secondary)", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</div>
                 <div style={{ fontSize: 24, fontWeight: 500, lineHeight: 1 }}>{value}</div>
@@ -831,7 +920,7 @@ export default function App() {
             {/* Compact 3D view */}
             <div style={{ height: 300 }}>
               <ClusterScatter3D
-                points={clusterPoints}
+                points={clusterData}
                 activeCluster={activeCluster}
                 onClusterClick={handleClusterClick}
               />
@@ -862,6 +951,7 @@ export default function App() {
       {/* ── Fullscreen overlay ────────────────────────────────────────────── */}
       {isFullscreen && (
         <FullscreenOverlay
+          points={clusterData}
           activeCluster={activeCluster}
           onClusterClick={handleClusterClick}
           onClose={() => setIsFullscreen(false)}
@@ -870,3 +960,4 @@ export default function App() {
     </div>
   );
 }
+
