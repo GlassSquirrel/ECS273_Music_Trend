@@ -518,6 +518,23 @@ function FullscreenOverlay({ points, activeCluster, onClusterClick, onClose }) {
         justifyContent: "center",
         animation: "fsPanel 0.28s ease",
       }}>
+        {/* All Clusters pill */}
+        <button
+          onClick={() => onClusterClick(null)}
+          style={{
+            display: "flex", alignItems: "center", gap: 5,
+            fontSize: 12,
+            background: activeCluster === null ? COLOR_ALL + "22" : "rgba(255,255,255,0.04)",
+            border: activeCluster === null ? `0.5px solid ${COLOR_ALL}66` : "0.5px solid rgba(255,255,255,0.10)",
+            borderRadius: 99, padding: "4px 12px 4px 8px", cursor: "pointer",
+            color: activeCluster === null ? "#e0dfd9" : "#888780",
+            fontWeight: activeCluster === null ? 500 : 400,
+            transition: "all 0.18s",
+          }}
+        >
+          <span style={{ width: 7, height: 7, borderRadius: 99, background: COLOR_ALL, flexShrink: 0, display: "inline-block" }} />
+          All Clusters
+        </button>
         {CLUSTER_LABELS.map((label, i) => (
           <button
             key={i}
@@ -551,7 +568,7 @@ function FullscreenOverlay({ points, activeCluster, onClusterClick, onClose }) {
 }
 
 // ─── ThemeRiver ───────────────────────────────────────────────────────────────
-function ThemeRiver({ data, activeCluster, onYearHover }) {
+function ThemeRiver({ data, activeCluster, onYearHover, onClusterClick }) {
   const svgRef = useRef(null);
   const [tooltip, setTooltip] = useState(null);
 
@@ -559,7 +576,8 @@ function ThemeRiver({ data, activeCluster, onYearHover }) {
     if (!svgRef.current || !data.length) return;
     const el = svgRef.current;
     const W = el.clientWidth || 620;
-    const H = 220;
+    const H = 230;
+    const L = 52;   // left margin — room for the Y-axis label
     d3.select(el).selectAll("*").remove();
 
     const svg = d3.select(el)
@@ -573,12 +591,24 @@ function ThemeRiver({ data, activeCluster, onYearHover }) {
 
     const xScale = d3.scaleLinear()
       .domain([data[0].year, data[data.length - 1].year])
-      .range([40, W - 20]);
+      .range([L, W - 20]);
     const yExtent = [
       d3.min(series, s => d3.min(s, d => d[0])),
       d3.max(series, s => d3.max(s, d => d[1])),
     ];
-    const yScale = d3.scaleLinear().domain(yExtent).range([H - 20, 20]);
+    const yScale = d3.scaleLinear().domain(yExtent).range([H - 22, 16]);
+
+    // ── Wiggle centre baseline (aesthetic anchor) ─────────────────────────────
+    const yCentre = yScale(0);
+    svg.append("line")
+      .attr("x1", L).attr("x2", W - 20)
+      .attr("y1", yCentre).attr("y2", yCentre)
+      .attr("stroke", "var(--color-border-tertiary)")
+      .attr("stroke-width", 1)
+      .attr("stroke-dasharray", "3 4")
+      .attr("opacity", 0.6);
+
+    // ── Bands ─────────────────────────────────────────────────────────────────
     const area = d3.area()
       .x(d => xScale(d.data.year))
       .y0(d => yScale(d[0]))
@@ -592,27 +622,46 @@ function ThemeRiver({ data, activeCluster, onYearHover }) {
       .attr("d", area)
       .attr("fill", (_, i) => CLUSTER_COLORS[i])
       .attr("opacity", (_, i) => activeCluster === null ? 0.82 : i === activeCluster ? 1 : 0.18)
-      .style("cursor", "crosshair")
+      .style("cursor", "pointer")
       .on("mousemove", function (event, d) {
         const [mx] = d3.pointer(event, el);
         const year = Math.round(xScale.invert(mx));
         const row  = data.find(r => r.year === year);
         if (row) {
-          const ci = parseInt(d.key.split("_")[1]);
-          setTooltip({ x: mx, y: event.offsetY, year, cluster: ci, value: row[d.key] });
+          const ci       = parseInt(d.key.split("_")[1]);
+          const yearTotal = keys.reduce((s, k) => s + (row[k] || 0), 0);
+          const pct      = yearTotal > 0 ? Math.round((row[d.key] / yearTotal) * 100) : 0;
+          setTooltip({ x: mx, y: event.offsetY, year, cluster: ci, value: row[d.key], pct });
           onYearHover?.(year);
         }
       })
-      .on("mouseleave", () => { setTooltip(null); onYearHover?.(null); });
+      .on("mouseleave", () => { setTooltip(null); onYearHover?.(null); })
+      .on("click", function (event, d) {
+        const ci = parseInt(d.key.split("_")[1]);
+        onClusterClick?.(ci);
+      });
 
+    // ── X axis ────────────────────────────────────────────────────────────────
     const xAxis = d3.axisBottom(xScale).ticks(10).tickFormat(d3.format("d")).tickSize(0);
     svg.append("g")
-      .attr("transform", `translate(0,${H - 18})`)
+      .attr("transform", `translate(0,${H - 20})`)
       .call(xAxis)
       .call(g => g.select(".domain").remove())
       .selectAll("text")
       .style("font-size", "11px")
       .style("fill", "var(--color-text-secondary)");
+
+    // ── Y-axis label (rotated) ────────────────────────────────────────────────
+    svg.append("text")
+      .attr("transform", `rotate(-90)`)
+      .attr("x", -(H / 2))
+      .attr("y", 13)
+      .attr("text-anchor", "middle")
+      .style("font-size", "9.5px")
+      .style("fill", "var(--color-text-secondary)")
+      .style("letter-spacing", "0.05em")
+      .text("← song count →");
+
   }, [data, activeCluster]);
 
   return (
@@ -626,11 +675,15 @@ function ThemeRiver({ data, activeCluster, onYearHover }) {
           borderRadius: "var(--border-radius-md)",
           padding: "8px 12px", fontSize: 12, pointerEvents: "none", zIndex: 10,
         }}>
-          <div style={{ fontWeight: 500, marginBottom: 4 }}>{tooltip.year}</div>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ width: 8, height: 8, borderRadius: 2, background: CLUSTER_COLORS[tooltip.cluster], display: "inline-block" }} />
-            <span style={{ color: "var(--color-text-secondary)" }}>{CLUSTER_LABELS[tooltip.cluster]}:</span>
+          <div style={{ fontWeight: 500, marginBottom: 5 }}>{tooltip.year}</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
+            <span style={{ width: 8, height: 8, borderRadius: 2, background: CLUSTER_COLORS[tooltip.cluster], display: "inline-block", flexShrink: 0 }} />
+            <span style={{ color: "var(--color-text-secondary)" }}>{CLUSTER_LABELS[tooltip.cluster]}</span>
+          </div>
+          <div style={{ display: "flex", gap: 10, paddingLeft: 14 }}>
             <span style={{ fontWeight: 500 }}>{tooltip.value} songs</span>
+            <span style={{ color: "var(--color-text-secondary)" }}>·</span>
+            <span style={{ color: "var(--color-text-secondary)" }}>{tooltip.pct}% of year</span>
           </div>
         </div>
       )}
@@ -743,7 +796,7 @@ export default function App() {
   const clusterColor = activeCluster !== null ? CLUSTER_COLORS[activeCluster] : COLOR_ALL;
 
   const handleClusterClick = i =>
-    setActiveCluster(prev => prev === i ? null : i);
+    setActiveCluster(i === null ? null : prev => prev === i ? null : i);
 
   if (loadState.isLoading) {
     return (
@@ -813,7 +866,7 @@ export default function App() {
           border: `0.5px solid ${clusterColor}`,
           background: clusterColor + "18", color: clusterColor, fontWeight: 500,
         }}>
-          Audio + Lyrics
+          Audio + Lyrics + Artist Tags
         </div>
       </div>
 
@@ -830,7 +883,7 @@ export default function App() {
           }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
               <div style={{ fontSize: 11, fontWeight: 500, color: "var(--color-text-secondary)", letterSpacing: "0.06em", textTransform: "uppercase" }}>
-                ThemeRiver — cluster trends, 1960–2010
+                ThemeRiver — genre share by year · band width = song count
               </div>
               {hoveredYear && <span style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>year: {hoveredYear}</span>}
             </div>
@@ -849,7 +902,7 @@ export default function App() {
                 </button>
               ))}
             </div>
-            <ThemeRiver data={themeRiverData} activeCluster={activeCluster} onYearHover={setHoveredYear} />
+            <ThemeRiver data={themeRiverData} activeCluster={activeCluster} onYearHover={setHoveredYear} onClusterClick={handleClusterClick} />
           </div>
 
           {/* Audio Features + Word Cloud */}
@@ -928,6 +981,19 @@ export default function App() {
 
             {/* Cluster swatches */}
             <div style={{ display: "flex", flexWrap: "wrap", gap: "5px 8px" }}>
+              {/* All Clusters pill */}
+              <button onClick={() => setActiveCluster(null)} style={{
+                display: "flex", alignItems: "center", gap: 4, fontSize: 11,
+                background: activeCluster === null ? COLOR_ALL + "18" : "none",
+                border: activeCluster === null ? `0.5px solid ${COLOR_ALL}55` : "0.5px solid transparent",
+                borderRadius: 99, padding: "2px 7px 2px 5px", cursor: "pointer",
+                color: activeCluster === null ? "var(--color-text-primary)" : "var(--color-text-secondary)",
+                fontWeight: activeCluster === null ? 500 : 400,
+                transition: "all 0.2s",
+              }}>
+                <span style={{ width: 6, height: 6, borderRadius: 99, background: COLOR_ALL, display: "inline-block", flexShrink: 0 }} />
+                All Clusters
+              </button>
               {CLUSTER_LABELS.map((label, i) => (
                 <button key={i} onClick={() => handleClusterClick(i)} style={{
                   display: "flex", alignItems: "center", gap: 4, fontSize: 11,
