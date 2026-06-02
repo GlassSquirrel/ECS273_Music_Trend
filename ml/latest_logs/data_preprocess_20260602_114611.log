@@ -1,0 +1,35 @@
+11:46:11 [INFO] Log file: logs/data_preprocess_20260602_114611.log
+11:46:11 [INFO] =======================================================
+11:46:11 [INFO] Loading msd_mxm_merged.csv ...
+11:46:13 [INFO]   Raw shape: (10000, 5079)
+11:46:13 [INFO] 
+=======================================================
+11:46:13 [INFO] Processing acoustic features ...
+11:46:13 [INFO]   Acoustic features : (10000, 39)
+11:46:13 [INFO] 
+=======================================================
+11:46:13 [INFO] Processing lyric features ...
+11:46:14 [INFO]   Raw BoW matrix    : (10000, 5000)
+11:46:14 [INFO]   Songs with lyrics : 2350 / 10000
+11:46:14 [INFO]   Stop words removed: 108
+11:46:14 [INFO]   Selected words    : 1000 (from 5000 total, stop words excluded)
+11:46:14 [INFO]   Top 10 words      : ['love', 'down', 'never', 'feel', 'want', 'ca', 'away', 'life', 'heart', 'night']
+11:46:14 [INFO]   SVD fit rows      : 2344 (excluded 6 zero-content rows from 2350 lyrics_available)
+11:46:14 [INFO]   Lyric dense shape : (10000, 50)
+11:46:14 [INFO] 
+=======================================================
+11:46:14 [INFO] Processing artist tags ...
+11:46:15 [INFO]   Artist tag vocab  : 100 (from 3502 unique tags)
+11:46:15 [INFO]   Top 10 tags       : ['rock', 'pop', 'electronic', 'jazz', 'united states', 'hip hop', 'alternative rock', 'folk', 'alternative', 'soul']
+11:46:15 [INFO]   Songs with tags   : 9780 / 10000
+11:46:15 [INFO] 
+=======================================================
+11:46:15 [INFO] Saving processed arrays to ../data/processed ...
+11:46:15 [INFO] 
+Summary:
+11:46:15 [INFO]   acoustic.npy   : (10000, 39)
+11:46:15 [INFO]   lyric.npy      : (10000, 50)
+11:46:15 [INFO]   tags.npy       : (10000, 100)
+11:46:15 [INFO]   has_lyrics.npy : (10000,)  (positive: 2350)
+11:46:15 [INFO]   has_tags.npy   : (10000,)    (positive: 9780)
+11:46:15 [INFO]   meta.csv       : (10000, 6)

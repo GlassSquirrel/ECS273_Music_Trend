@@ -1,0 +1,37 @@
+11:45:18 [INFO] Log file: logs/data_merge_20260602_114518.log
+11:45:18 [INFO] =======================================================
+11:45:18 [INFO] Step 1: Loading MSD subset
+11:45:18 [INFO]   MSD subset shape: (10000, 78)
+11:45:18 [INFO]   Unique track IDs: 10000
+11:45:18 [INFO] 
+=======================================================
+11:45:18 [INFO] Step 2: Parsing musiXmatch files
+11:45:18 [INFO] Parsing mxm_dataset_train.txt ...
+11:45:18 [INFO]   Vocabulary size: 5000
+11:45:21 [INFO]   Songs parsed: 210519
+11:45:21 [INFO] Parsing mxm_dataset_test.txt ...
+11:45:21 [INFO]   Vocabulary size: 5000
+11:45:22 [INFO]   Songs parsed: 27143
+11:45:22 [INFO]   Total musiXmatch songs (train + test): 237662
+11:45:22 [INFO] 
+=======================================================
+11:45:22 [INFO] Step 3: Building raw BoW DataFrame
+11:45:22 [INFO] Songs matched with MSD subset: 2350 / 237662
+11:45:22 [INFO] Building raw BoW count matrix (2350 x 5000) ...
+11:45:22 [INFO] Raw BoW DataFrame shape: (2350, 5000)
+11:45:22 [INFO] 
+=======================================================
+11:45:22 [INFO] Step 4: Merging MSD subset with raw BoW lyrics
+11:45:23 [INFO]   Merged shape      : (10000, 5079)
+11:45:23 [INFO]   Songs with lyrics : 2350 / 10000
+11:45:23 [INFO]   BoW columns       : 5000 (raw counts, no TF-IDF)
+11:45:23 [INFO] 
+=======================================================
+11:45:23 [INFO] Step 5: Saving
+11:45:50 [INFO]   Saved: ../data/msd_mxm_merged.csv
+11:45:50 [INFO] 
+Column overview:
+11:45:50 [INFO]   Original MSD columns : 78
+11:45:50 [INFO]   BoW word columns     : 5000  (bow_<word>, raw counts)
+11:45:50 [INFO]   lyrics_available flag: 1 column
+11:45:50 [INFO]   Total columns        : 5079

@@ -1,0 +1,62 @@
+11:48:08 [INFO] Log file: logs/cluster_20260602_114808.log
+11:48:08 [INFO] =======================================================
+11:48:08 [INFO] Loading latent vectors ...
+11:48:08 [INFO]   Shape: (10000, 32)
+11:48:08 [INFO] 
+=======================================================
+11:48:08 [INFO] Step 1: K selection
+11:48:08 [INFO] Sweeping K in [4, 5, 6, 7, 8, 9, 10] on 32-dim latent space ...
+11:48:08 [INFO]   k= 4 | inertia=  211577.8 | silhouette=0.0837
+11:48:08 [INFO]   k= 5 | inertia=  207540.3 | silhouette=0.0817
+11:48:08 [INFO]   k= 6 | inertia=  204090.0 | silhouette=0.0816
+11:48:08 [INFO]   k= 7 | inertia=  201268.9 | silhouette=0.0854
+11:48:09 [INFO]   k= 8 | inertia=  198769.8 | silhouette=0.0890
+11:48:09 [INFO]   k= 9 | inertia=  196496.5 | silhouette=0.0864
+11:48:09 [INFO]   k=10 | inertia=  194824.5 | silhouette=0.0844
+11:48:09 [INFO] Saved: results/figures/cluster_selection.png
+11:48:09 [INFO] 
+Best K by Silhouette score: 8
+11:48:09 [INFO] 
+=======================================================
+11:48:09 [INFO] Step 2: KMeans clustering with K=8 ...
+11:48:10 [INFO] KMeans (k=8, n_init=20): silhouette (cosine) = 0.0890
+11:48:10 [INFO] 
+=======================================================
+11:48:10 [INFO] Saving outputs ...
+11:48:10 [INFO] Saved: results/cluster_labels.npy
+11:48:10 [INFO] Saved: results/msd_clustered.csv
+11:48:10 [INFO] 
+Cluster sizes:
+11:48:10 [INFO] cluster
+0    1460
+1    1164
+2    1558
+3    1158
+4    1083
+5    1398
+6     960
+7    1219
+11:48:10 [INFO] 
+Decade × cluster counts:
+11:48:10 [INFO] cluster    0    1    2    3    4    5    6    7
+decade                                         
+1920       0    0    0    5    0    0    1    0
+1930       0    0    0    5    0    0    1    0
+1940       0    0    1    3    0    0    0    0
+1950       1    2    4    7    0    6    6    4
+1960       6   24    6   16    4   31   34   16
+1970      26   28   16   18   20   34   54   50
+1980      92   42   47   38   46   59   58   57
+1990     191  140  178  111  122  203  109  151
+2000     612  317  409  169  257  298  176  305
+2010      21    8    8    3    7    4    3   10
+11:48:10 [INFO] 
+Top 5 artist tags per cluster:
+11:48:10 [INFO]   Cluster 0: ['rock', 'metal', 'punk', 'pop', 'alternative']
+11:48:10 [INFO]   Cluster 1: ['rock', 'pop', 'jazz', 'electronic', 'soul']
+11:48:10 [INFO]   Cluster 2: ['hip hop', 'pop', 'rap', 'rock', 'electronic']
+11:48:10 [INFO]   Cluster 3: ['rock', 'jazz', 'pop', 'electronic', 'united states']
+11:48:10 [INFO]   Cluster 4: ['electronic', 'rock', 'pop', 'jazz', 'hip hop']
+11:48:10 [INFO]   Cluster 5: ['rock', 'pop', 'electronic', 'jazz', 'folk']
+11:48:10 [INFO]   Cluster 6: ['rock', 'pop', 'jazz', 'electronic', 'folk']
+11:48:10 [INFO]   Cluster 7: ['rock', 'pop', 'electronic', 'alternative rock', 'jazz']
