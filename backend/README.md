@@ -1,160 +1,51 @@
-# Backend README
+# Backend
 
-This backend serves the frontend through MongoDB-backed APIs.
+Express API server that reads from MongoDB and serves the frontend dashboard.
 
-It uses two MongoDB collections:
+## Setup & run
 
-- `songs`
-- `visualization_cache`
-
-## 1. Import Data Into MongoDB
-
-### Prerequisites
-
-Make sure the following are ready before importing:
-
-- MongoDB is running locally or you have a reachable MongoDB URI
-- The ML pipeline outputs already exist in this repo:
-  - `ml/results/msd_clustered.csv`
-  - `ml/results/umap_coords_3d.npy`
-  - `data/processed/acoustic.npy`
-  - `data/processed/transformers.pkl`
-
-
-### Install Import Dependencies
-
-From the repo root:
+See the [root README](../README.md) for the full quick-start guide (data import + running both servers).
 
 ```bash
-pip install -r backend/requirements.txt
-```
-
-### Run the Import Script
-
-From the repo root:
-
-```bash
-python backend/scripts/import_data.py
-```
-
-What this does:
-
-- imports song-level records into `music_trend.songs`
-- imports frontend-ready visualization data into `music_trend.visualization_cache`
-
-Expected success output:
-
-```bash
-Imported 10000 songs into 'music_trend.songs'
-Upserted 4 cache docs into 'music_trend.visualization_cache'
-```
-
-After this, you should be able to see both collections in MongoDB Compass.
-
-## 2. Start The  Project
-
-The final project has two running parts:
-
-- backend API server
-- frontend Vite app
-
-You need two terminals.
-
-### Step A: Start the Backend
-
-Go into `backend/` and install Node dependencies once:
-
-```bash
-cd backend
+# from backend/
 npm install
+npm run dev   # http://localhost:8000
 ```
 
-Then start the backend:
+## Environment
 
-```bash
-npm run dev
+Copy `.env.example` to `.env` and adjust if your MongoDB is not on the default local port:
+
+```
+PORT=8000
+MONGODB_URI=mongodb://127.0.0.1:27017
+MONGODB_DB=music_trend
 ```
 
-Expected output:
+## API endpoints
 
-```bash
-API listening on http://localhost:8000
+| Endpoint | Description |
+|---|---|
+| `GET /api/health` | Liveness check |
+| `GET /api/bootstrap` | Returns all dashboard data in one payload |
+
+`/api/bootstrap` response shape:
+
+```json
+{
+  "clusterData":      [...],
+  "themeRiverData":   [...],
+  "audioFeatureData": { "features": {}, "display": {} },
+  "wordCloudData":    {},
+  "stats":            { "totalSongs": 10000, "clusteredSongs": 10000, "clusters": 8 }
+}
 ```
 
-You can verify the backend with:
+## Collections
 
-```bash
-http://localhost:8000/api/health
-http://localhost:8000/api/bootstrap
-```
+| Collection | Contents |
+|---|---|
+| `music_trend.songs` | 10,000 track records (metadata + cluster label + UMAP coords) |
+| `music_trend.visualization_cache` | Pre-aggregated data for each dashboard panel |
 
-### Step B: Start the Frontend
-
-Open a second terminal and run:
-
-```bash
-cd client
-npm install
-npm run dev
-```
-
-Expected output includes:
-
-```bash
-Local: http://localhost:5173/
-```
-
-Open:
-
-```bash
-http://localhost:5173/
-```
-
-### How The Final Project Works
-
-The frontend does not read local JSON files directly anymore.
-
-The runtime flow is:
-
-1. browser opens the frontend at `http://localhost:5173`
-2. frontend requests `/api/bootstrap`
-3. Vite proxies `/api/*` to `http://localhost:8000`
-4. backend reads MongoDB
-5. backend returns:
-   - `clusterData`
-   - `themeRiverData`
-   - `audioFeatureData`
-   - `wordCloudData`
-   - `stats`
-6. frontend renders the dashboard
-
-## Quick Start Summary
-
-From the repo root:
-
-```bash
-pip install -r backend/requirements.txt
-python backend/scripts/import_data.py
-```
-
-Terminal 1:
-
-```bash
-cd backend
-npm install
-npm run dev
-```
-
-Terminal 2:
-
-```bash
-cd client
-npm install
-npm run dev
-```
-
-Then open:
-
-```bash
-http://localhost:5173/
-```
+Populated by running `python backend/scripts/import_data.py` from the repo root.
