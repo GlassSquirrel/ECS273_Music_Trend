@@ -136,8 +136,10 @@ Output: `results/latent_vectors.npy` — shape `(10000, 32)`.
 ### Step 3 — Clustering
 
 ```bash
-python cluster.py           # auto-selects K via Silhouette score
-python cluster.py --k 8     # or fix K directly
+# auto-selects K via Silhouette score:
+python cluster.py --latent results/latent_vectors.npy --output results/
+# or fix K directly
+python cluster.py --latent results/latent_vectors.npy --output results/ --k 8
 ```
 
 Sweeps K ∈ {4, …, 10} and picks the K that maximises the Silhouette score (cosine distance) on a 2,000-point sample. KMeans is then run with 20 restarts to avoid poor local minima. **K = 8** was selected.
