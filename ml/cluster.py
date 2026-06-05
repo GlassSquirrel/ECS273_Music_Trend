@@ -177,12 +177,26 @@ def main():
     parser = argparse.ArgumentParser(description="Cluster VAE latent vectors")
     parser.add_argument("--k", type=int, default=None,
                         help="Fix K (skips automatic search if provided)")
+    parser.add_argument("--latent", type=str, default=LATENT_PATH,
+                        help="Path to latent_vectors.npy")
+    parser.add_argument("--output", type=str, default=RESULTS_DIR,
+                        help="Output directory for cluster labels and CSV")
     args = parser.parse_args()
+
+    # Resolve output paths from args (not hardcoded constants)
+    out_dir     = args.output
+    figures_dir = os.path.join(out_dir, "figures")
+    labels_path = os.path.join(out_dir, "cluster_labels.npy")
+    clustered_path = os.path.join(out_dir, "msd_clustered.csv")
+    selection_plot = os.path.join(figures_dir, "cluster_selection.png")
+
+    os.makedirs(out_dir, exist_ok=True)
+    os.makedirs(figures_dir, exist_ok=True)
 
     # ── Load latent vectors ──────────────────────────────────────────────────
     logger.info("=" * 55)
-    logger.info("Loading latent vectors ...")
-    vectors = np.load(LATENT_PATH)
+    logger.info(f"Loading latent vectors from: {args.latent}")
+    vectors = np.load(args.latent)          # <-- was hardcoded LATENT_PATH
     logger.info(f"  Shape: {vectors.shape}")
 
     # ── Find optimal K (or use the user-supplied value) ──────────────────────
@@ -192,7 +206,8 @@ def main():
         logger.info(f"Using user-specified K = {best_k} (skipping K search)")
     else:
         logger.info("Step 1: K selection")
-        best_k = find_optimal_k(vectors, k_range=K_RANGE)
+        best_k = find_optimal_k(vectors, k_range=K_RANGE,
+                                save_path=selection_plot)  # <-- was hardcoded
 
     # ── Run KMeans ───────────────────────────────────────────────────────────
     logger.info("\n" + "=" * 55)
@@ -201,19 +216,15 @@ def main():
 
     # ── Save outputs ─────────────────────────────────────────────────────────
     logger.info("\n" + "=" * 55)
-    logger.info("Saving outputs ...")
-    os.makedirs(RESULTS_DIR, exist_ok=True)
-    os.makedirs(FIGURES_DIR, exist_ok=True)
+    logger.info(f"Saving outputs to: {out_dir}")
 
-    labels_path = os.path.join(RESULTS_DIR, "cluster_labels.npy")
-    np.save(labels_path, labels)
+    np.save(labels_path, labels)            # <-- was hardcoded
     logger.info(f"Saved: {labels_path}")
 
     # Attach labels to metadata and save
     meta_df = pd.read_csv(META_PATH)
     meta_df["cluster"] = labels
-    clustered_path = os.path.join(RESULTS_DIR, "msd_clustered.csv")
-    meta_df.to_csv(clustered_path, index=False)
+    meta_df.to_csv(clustered_path, index=False)   # <-- was hardcoded
     logger.info(f"Saved: {clustered_path}")
 
     # ── Print summary ────────────────────────────────────────────────────────
