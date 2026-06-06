@@ -2,8 +2,7 @@
 
 An interactive visualization dashboard exploring how music genres evolved from 1960 to 2010. Built on a 10,000-track subset of the Million Song Dataset (MSD), fused with musiXmatch lyrics, and clustered in a learned latent space.
 
-![Dashboard](demo/homepage-demo.png)
-![Cluster](demo/cluster-demo.png)
+![Demo](demo/demo-video.gif)
 
 ---
 
